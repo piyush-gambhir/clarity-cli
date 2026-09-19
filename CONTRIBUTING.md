@@ -15,4 +15,4 @@ Add endpoint contracts in `internal/client`, command composition in `cmd`, and o
 
 Submit changes through a pull request. Commits must be signed. The default branch requires linear history, resolved review threads, and passing Go CI and CodeQL checks; squash or rebase merges are supported.
 
-To release, validate `cli-go/.goreleaser.yaml` with GoReleaser v2, run CI, set `cli-go/VERSION`, and push a signed version tag. The release workflow builds binaries and checksums. `install.sh` and `clarity update` use that repository's release assets. Local development versions do not trigger any background update requests.
+To release, run `goreleaser check --config cli-go/.goreleaser.yaml` from the repository root, run CI, set `cli-go/VERSION`, and push a signed version tag. A local packaging check is `goreleaser release --snapshot --clean --skip=publish --config cli-go/.goreleaser.yaml`, also from the root. The release workflow builds binaries and checksums. `install.sh` and `clarity update` use that repository's release assets. Local development versions do not trigger any background update requests.

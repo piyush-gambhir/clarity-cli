@@ -1,5 +1,6 @@
 /cli-go/bin/
 /cli-go/dist/
+/dist/
 /web/node_modules/
 /web/.next/
 /web/out/

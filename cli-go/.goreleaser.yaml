@@ -2,6 +2,7 @@ version: 2
 project_name: clarity-cli
 builds:
   - binary: clarity
+    dir: cli-go
     env: [CGO_ENABLED=0]
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
@@ -17,8 +18,8 @@ archives:
         formats: [zip]
     name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}'
     files:
-      - ../LICENSE
-      - ../README.md
+      - LICENSE
+      - README.md
 checksum:
   name_template: checksums.txt
 changelog:
