@@ -1,0 +1,11 @@
+/cli-go/bin/
+/cli-go/dist/
+/web/node_modules/
+/web/.next/
+/web/out/
+/web/tsconfig.tsbuildinfo
+.DS_Store
+.env
+.env.*
+!.env.example
+*.test

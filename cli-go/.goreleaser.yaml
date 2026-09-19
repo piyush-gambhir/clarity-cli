@@ -1,0 +1,25 @@
+version: 2
+project_name: clarity-cli
+builds:
+  - binary: clarity
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X github.com/piyush-gambhir/clarity-cli/cli-go/internal/build.Version={{.Version}}
+      - -X github.com/piyush-gambhir/clarity-cli/cli-go/internal/build.Commit={{.Commit}}
+      - -X github.com/piyush-gambhir/clarity-cli/cli-go/internal/build.Date={{.Date}}
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}'
+    files:
+      - ../LICENSE
+      - ../README.md
+checksum:
+  name_template: checksums.txt
+changelog:
+  sort: asc

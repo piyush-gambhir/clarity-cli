@@ -1,0 +1,38 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: cli-go
+        shell: bash
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: cli-go/go.mod
+          cache-dependency-path: cli-go/go.sum
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+      - run: go build ./...
+      - name: Verify generated command docs
+        run: |
+          go run ./tools/gendocs > ../docs/commands.md
+          git diff --exit-code -- ../docs/commands.md
+      - name: Verify source install
+        run: |
+          install_dir="$(mktemp -d)"
+          make install "INSTALL_DIR=$install_dir"
+          "$install_dir/clarity" version
