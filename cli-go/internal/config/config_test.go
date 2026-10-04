@@ -32,6 +32,21 @@ func TestResolvePrecedence(t *testing.T) {
 	}
 }
 
+func TestResolveRejectsBlankOverrides(t *testing.T) {
+	c := &Config{CurrentProfile: "one", Profiles: map[string]Profile{"one": {Token: "first"}}}
+	t.Setenv("CLARITY_API_TOKEN", "")
+	if _, _, err := c.Resolve("", " \t"); err == nil {
+		t.Fatal("blank --token accepted")
+	}
+	t.Setenv("CLARITY_API_TOKEN", " ")
+	if _, _, err := c.Resolve("", ""); err == nil {
+		t.Fatal("blank CLARITY_API_TOKEN accepted")
+	}
+	if token, source, err := c.Resolve("", " flag "); err != nil || token != "flag" || source != "flag" {
+		t.Fatalf("token=%q source=%q err=%v", token, source, err)
+	}
+}
+
 func TestAtomicConcurrentUpdatesAndPermissions(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	var wg sync.WaitGroup

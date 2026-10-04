@@ -94,11 +94,18 @@ func (c *Config) Resolve(profile, token string) (string, string, error) {
 	if profile == "" {
 		profile = c.CurrentProfile
 	}
+	// A set but blank override is an error rather than a silently empty credential.
 	if token != "" {
-		return strings.TrimSpace(token), "flag", nil
+		if token = strings.TrimSpace(token); token == "" {
+			return "", "", fmt.Errorf("--token is blank")
+		}
+		return token, "flag", nil
 	}
 	if token = os.Getenv("CLARITY_API_TOKEN"); token != "" {
-		return strings.TrimSpace(token), "environment", nil
+		if token = strings.TrimSpace(token); token == "" {
+			return "", "", fmt.Errorf("CLARITY_API_TOKEN is blank; unset it or set a project token")
+		}
+		return token, "environment", nil
 	}
 	if profile == "" {
 		return "", "", fmt.Errorf("no token configured; run clarity auth login or set CLARITY_API_TOKEN")

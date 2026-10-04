@@ -120,3 +120,15 @@ func TestMachineErrorsAndOfflineCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestBlankEnvironmentTokenFailsReadably(t *testing.T) {
+	isolate(t)
+	t.Setenv("CLARITY_API_TOKEN", " ")
+	var out, errOut bytes.Buffer
+	if code := Run(context.Background(), []string{"auth", "status"}, strings.NewReader(""), &out, &errOut); code != 1 || out.Len() != 0 {
+		t.Fatalf("code=%d stdout=%q", code, out.String())
+	}
+	if !strings.Contains(errOut.String(), "CLARITY_API_TOKEN is blank") {
+		t.Fatalf("stderr=%q", errOut.String())
+	}
+}
