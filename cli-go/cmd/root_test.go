@@ -59,6 +59,10 @@ func TestAuthLifecycle(t *testing.T) {
 	if code, _, _ := run("", "auth", "status"); code == 0 {
 		t.Fatal("status succeeded after logout")
 	}
+	// Logout cleared the current profile, so a bare logout must say what to pass.
+	if code, _, err := run("", "auth", "logout"); code == 0 || !strings.Contains(err, "no profile selected") {
+		t.Fatalf("logout without a profile: %d %s", code, err)
+	}
 	if code, _, _ := run("", "auth", "login", "--no-input"); code == 0 {
 		t.Fatal("missing noninteractive token accepted")
 	}
