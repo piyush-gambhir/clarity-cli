@@ -17,7 +17,7 @@ curl -fsSL https://raw.githubusercontent.com/piyush-gambhir/clarity-cli/main/ins
 Installs to `~/.local/bin` by default. Override with `INSTALL_DIR` or pin a release with `VERSION`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/piyush-gambhir/clarity-cli/main/install.sh | VERSION=v0.1.0 sh
+curl -fsSL https://raw.githubusercontent.com/piyush-gambhir/clarity-cli/main/install.sh | VERSION=v0.1.2 sh
 ```
 
 Prebuilt macOS/Linux/Windows binaries and checksums are on the [releases page](https://github.com/piyush-gambhir/clarity-cli/releases).
@@ -39,7 +39,7 @@ From a checkout, you can also use the standalone release installer:
 
 ```bash
 sh install.sh
-# Optional: VERSION=v0.1.0 INSTALL_DIR="$HOME/.local/bin" sh install.sh
+# Optional: VERSION=v0.1.2 INSTALL_DIR="$HOME/.local/bin" sh install.sh
 ```
 
 The installer supports macOS/Linux amd64 and arm64 and verifies SHA-256 checksums. Windows release archives contain `clarity.exe` (amd64/arm64). On Windows, replace the executable manually to update.

@@ -180,6 +180,9 @@ func (a *app) logout() *cobra.Command {
 			if name == "" {
 				name = c.CurrentProfile
 			}
+			if name == "" {
+				return fmt.Errorf("no profile selected and no current profile saved; pass --profile NAME (clarity auth list shows them)")
+			}
 			if _, ok := c.Profiles[name]; !ok {
 				return fmt.Errorf("profile %q not found", name)
 			}
