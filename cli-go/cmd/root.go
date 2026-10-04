@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 	_ "time/tzdata"
@@ -14,6 +15,7 @@ import (
 	"github.com/piyush-gambhir/clarity-cli/cli-go/internal/client"
 	"github.com/piyush-gambhir/clarity-cli/cli-go/internal/config"
 	"github.com/piyush-gambhir/clarity-cli/cli-go/internal/output"
+	"github.com/piyush-gambhir/clarity-cli/cli-go/internal/update"
 	"github.com/spf13/cobra"
 )
 
@@ -24,6 +26,11 @@ type app struct {
 	in                                io.Reader
 	out, errOut                       io.Writer
 	newClient                         func(string, time.Duration) *client.Client
+	// Update injection points; newRoot fills real defaults.
+	releases   update.Source
+	terminal   func(any) bool
+	executable func() (string, error)
+	check      *updateCheck
 }
 
 func envBool(name string) bool { s := os.Getenv(name); return s == "1" || strings.EqualFold(s, "true") }
@@ -33,6 +40,15 @@ func NewRoot(in io.Reader, out, errOut io.Writer) *cobra.Command {
 }
 
 func newRoot(a *app) *cobra.Command {
+	if a.releases == (update.Source{}) {
+		a.releases = update.GitHub
+	}
+	if a.terminal == nil {
+		a.terminal = isTerminal
+	}
+	if a.executable == nil {
+		a.executable = executable
+	}
 	root := &cobra.Command{
 		Use: "clarity", Short: "Microsoft Clarity analytics and session recordings from your terminal",
 		Long:         "Read Microsoft Clarity data using project API tokens.\nExport dashboard metrics, query analytics, find session recordings, and search documentation.\nAll remote operations are read-only. Profiles store one token per project.",
@@ -47,8 +63,10 @@ func newRoot(a *app) *cobra.Command {
 			if a.readOnly && cmd.Annotations["writes-local"] == "true" {
 				return fmt.Errorf("%s changes local state and is blocked by --read-only", cmd.CommandPath())
 			}
+			a.startUpdateCheck(cmd)
 			return nil
 		},
+		PersistentPostRun: func(cmd *cobra.Command, args []string) { a.printUpdateNotice() },
 	}
 	root.SetIn(a.in)
 	root.SetOut(a.out)
@@ -63,8 +81,17 @@ func newRoot(a *app) *cobra.Command {
 	f.BoolVarP(&a.verbose, "verbose", "v", envBool("CLARITY_VERBOSE"), "Log request method, URL, and status to stderr (no tokens/bodies)")
 	f.BoolVar(&a.readOnly, "read-only", envBool("CLARITY_READ_ONLY"), "Also block local credential changes and self-update")
 	root.AddCommand(a.auth(), a.export(), a.analytics(), a.recordings(), a.docs(), a.update())
-	root.AddCommand(&cobra.Command{Use: "version", Short: "Print build information", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
-		return a.print(map[string]string{"version": build.Version, "commit": build.Commit, "date": build.Date})
+	root.AddCommand(&cobra.Command{Use: "version", Short: "Print build information", Long: "Print build information. When an earlier update check found the latest release, also show it and whether an update is available (from the cache only, never the network).", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
+		info := map[string]any{"version": build.Version, "commit": build.Commit, "date": build.Date}
+		if path, err := updateCachePath(); err == nil {
+			if latest := update.LoadCache(path).LatestVersion; latest != "" {
+				info["latest"] = latest
+				if update.IsRelease(build.Version) {
+					info["update_available"] = update.Newer(latest, build.Version)
+				}
+			}
+		}
+		return a.print(info)
 	}})
 	login := a.login()
 	login.Use = "login"
@@ -92,6 +119,11 @@ func newRoot(a *app) *cobra.Command {
 }
 
 func Run(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) int {
+	if runtime.GOOS == "windows" {
+		if exe, err := executable(); err == nil {
+			update.RemoveOld(exe) // left behind by a previous self-update
+		}
+	}
 	a := &app{in: in, out: out, errOut: errOut, newClient: client.New}
 	root := newRoot(a)
 	root.SetArgs(args)

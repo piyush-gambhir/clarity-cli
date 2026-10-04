@@ -2,34 +2,366 @@ package update
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"io/fs"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
+	"time"
 )
 
-func TestChecksumAndExtraction(t *testing.T) {
+type entry struct {
+	name     string
+	typeflag byte // tar type; for zip, TypeSymlink marks a symlink
+	body     string
+}
+
+func tarGz(t *testing.T, entries ...entry) []byte {
+	t.Helper()
 	var b bytes.Buffer
 	z := gzip.NewWriter(&b)
 	tw := tar.NewWriter(z)
-	content := []byte("binary")
-	if err := tw.WriteHeader(&tar.Header{Name: "clarity", Mode: 0755, Size: int64(len(content))}); err != nil {
+	for _, e := range entries {
+		h := &tar.Header{Name: e.name, Mode: 0o755, Typeflag: e.typeflag, Size: int64(len(e.body))}
+		if e.typeflag != tar.TypeReg {
+			h.Size, h.Linkname = 0, "/etc/passwd"
+		}
+		if err := tw.WriteHeader(h); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write([]byte(e.body)); err != nil && e.typeflag == tar.TypeReg {
+			t.Fatal(err)
+		}
+	}
+	if err := tw.Close(); err != nil {
 		t.Fatal(err)
 	}
-	tw.Write(content)
-	tw.Close()
-	z.Close()
-	hash := sha256.Sum256(b.Bytes())
-	checksums := []byte(fmt.Sprintf("%x  clarity-cli_darwin_arm64.tar.gz\n", hash))
-	if err := VerifyChecksum(b.Bytes(), checksums, "clarity-cli_darwin_arm64.tar.gz"); err != nil {
+	if err := z.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := VerifyChecksum([]byte("tampered"), checksums, "clarity-cli_darwin_arm64.tar.gz"); err == nil {
+	return b.Bytes()
+}
+
+func zipArchive(t *testing.T, entries ...entry) []byte {
+	t.Helper()
+	var b bytes.Buffer
+	zw := zip.NewWriter(&b)
+	for _, e := range entries {
+		h := &zip.FileHeader{Name: e.name, Method: zip.Deflate}
+		h.SetMode(0o755)
+		if e.typeflag == tar.TypeSymlink {
+			h.SetMode(fs.ModeSymlink | 0o777)
+		}
+		w, err := zw.CreateHeader(h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.Write([]byte(e.body))
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return b.Bytes()
+}
+
+func checksum(name string, data []byte) []byte {
+	return []byte(fmt.Sprintf("%x  %s\n", sha256.Sum256(data), name))
+}
+
+func TestChecksumAndExtraction(t *testing.T) {
+	archive := tarGz(t, entry{"LICENSE", tar.TypeReg, "MIT"}, entry{"clarity", tar.TypeReg, "binary"})
+	asset := "clarity-cli_darwin_arm64.tar.gz"
+	if err := VerifyChecksum(archive, checksum(asset, archive), asset); err != nil {
+		t.Fatal(err)
+	}
+	if err := VerifyChecksum([]byte("tampered"), checksum(asset, archive), asset); err == nil {
 		t.Fatal("accepted tampered archive")
 	}
-	got, err := ExtractBinary(b.Bytes())
-	if err != nil || !bytes.Equal(got, content) {
-		t.Fatalf("extract %s %v", got, err)
+	if err := VerifyChecksum(archive, checksum("clarity-cli_linux_amd64.tar.gz", archive), asset); err == nil {
+		t.Fatal("accepted archive without a checksum entry")
+	}
+	if got, err := ExtractBinary(archive, "darwin"); err != nil || string(got) != "binary" {
+		t.Fatalf("extract %q %v", got, err)
+	}
+	z := zipArchive(t, entry{"README.md", tar.TypeReg, "readme"}, entry{"clarity.exe", tar.TypeReg, "exe"})
+	if got, err := ExtractBinary(z, "windows"); err != nil || string(got) != "exe" {
+		t.Fatalf("extract zip %q %v", got, err)
+	}
+}
+
+func TestExtractRefusesUnsafeArchives(t *testing.T) {
+	good := entry{"clarity", tar.TypeReg, "binary"}
+	for name, archive := range map[string][]byte{
+		"traversal":      tarGz(t, entry{"../clarity", tar.TypeReg, "evil"}, good),
+		"absolute":       tarGz(t, entry{"/tmp/clarity", tar.TypeReg, "evil"}, good),
+		"backslash":      tarGz(t, entry{`..\clarity`, tar.TypeReg, "evil"}, good),
+		"symlink":        tarGz(t, entry{"clarity", tar.TypeSymlink, ""}),
+		"hardlink":       tarGz(t, entry{"clarity", tar.TypeLink, ""}),
+		"directory":      tarGz(t, entry{"clarity/", tar.TypeDir, ""}),
+		"duplicate":      tarGz(t, good, good),
+		"missing":        tarGz(t, entry{"README.md", tar.TypeReg, "readme"}),
+		"zip as tar.gz":  zipArchive(t, entry{"clarity", tar.TypeReg, "binary"}),
+		"empty binary":   tarGz(t, entry{"clarity", tar.TypeReg, ""}),
+		"nested binary":  tarGz(t, entry{"bin/clarity", tar.TypeReg, "binary"}),
+		"dot-dot inside": tarGz(t, entry{"a/../../clarity", tar.TypeReg, "evil"}, good),
+	} {
+		if got, err := ExtractBinary(archive, "linux"); err == nil {
+			t.Errorf("%s: extracted %q", name, got)
+		}
+	}
+	goodExe := entry{"clarity.exe", tar.TypeReg, "exe"}
+	for name, archive := range map[string][]byte{
+		"zip traversal": zipArchive(t, entry{"../clarity.exe", tar.TypeReg, "evil"}, goodExe),
+		"zip drive":     zipArchive(t, entry{"C:/clarity.exe", tar.TypeReg, "evil"}, goodExe),
+		"zip symlink":   zipArchive(t, entry{"clarity.exe", tar.TypeSymlink, "C:/Windows/notepad.exe"}),
+		"zip duplicate": zipArchive(t, goodExe, goodExe),
+		"zip missing":   zipArchive(t, entry{"clarity", tar.TypeReg, "unix binary"}),
+	} {
+		if got, err := ExtractBinary(archive, "windows"); err == nil {
+			t.Errorf("%s: extracted %q", name, got)
+		}
+	}
+}
+
+func writeExe(t *testing.T, content string) string {
+	t.Helper()
+	exe := filepath.Join(t.TempDir(), "clarity")
+	if err := os.WriteFile(exe, []byte(content), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return exe
+}
+
+func assertFile(t *testing.T, path, want string) {
+	t.Helper()
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != want {
+		t.Fatalf("%s = %q, %v; want %q", path, got, err, want)
+	}
+}
+
+// assertOnly fails if dir holds anything besides the named files (such as a leftover temp file).
+func assertOnly(t *testing.T, dir string, names ...string) {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, e := range entries {
+		got = append(got, e.Name())
+	}
+	if strings.Join(got, ",") != strings.Join(names, ",") {
+		t.Fatalf("%s has %v, want %v", dir, got, names)
+	}
+}
+
+func TestReplaceUnix(t *testing.T) {
+	exe := writeExe(t, "old")
+	if err := Replace("linux", exe, []byte("new")); err != nil {
+		t.Fatal(err)
+	}
+	assertFile(t, exe, "new")
+	assertOnly(t, filepath.Dir(exe), "clarity")
+	if fi, _ := os.Stat(exe); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o755 {
+		t.Fatalf("mode %v, want 0755", fi.Mode().Perm())
+	}
+}
+
+func TestReplaceWindowsRenamesRunningExeAside(t *testing.T) {
+	exe := writeExe(t, "old") + ".exe"
+	if err := os.Rename(strings.TrimSuffix(exe, ".exe"), exe); err != nil {
+		t.Fatal(err)
+	}
+	if err := Replace("windows", exe, []byte("new")); err != nil {
+		t.Fatal(err)
+	}
+	assertFile(t, exe, "new")
+	assertFile(t, exe+".old", "old")
+	// The next start removes the leftover.
+	RemoveOld(exe)
+	assertOnly(t, filepath.Dir(exe), "clarity.exe")
+
+	// A failed move into place restores the previous executable.
+	defer func() { rename = os.Rename }()
+	rename = func(from, to string) error {
+		if strings.Contains(filepath.Base(from), ".clarity-update-") {
+			return errors.New("simulated failure")
+		}
+		return os.Rename(from, to)
+	}
+	if err := Replace("windows", exe, []byte("newer")); err == nil {
+		t.Fatal("expected failure")
+	}
+	assertFile(t, exe, "new")
+	assertOnly(t, filepath.Dir(exe), "clarity.exe")
+}
+
+func TestReplaceUnwritableDirectoryKeepsOldBinary(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("directory permissions do not restrict this user")
+	}
+	exe := writeExe(t, "old")
+	dir := filepath.Dir(exe)
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(dir, 0o755)
+	err := Replace("linux", exe, []byte("new"))
+	if err == nil || !strings.Contains(err.Error(), "sudo") || !strings.Contains(err.Error(), "install.sh") || !strings.Contains(err.Error(), "not changed") {
+		t.Fatalf("err = %v", err)
+	}
+	assertFile(t, exe, "old")
+}
+
+func releaseServer(t *testing.T, assets map[string][]byte) Source {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/latest" {
+			fmt.Fprint(w, `{"tag_name":"v0.1.3","html_url":"https://example.com/ignored"}`)
+			return
+		}
+		b, ok := assets[strings.TrimPrefix(r.URL.Path, "/download/v0.1.3/")]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write(b)
+	}))
+	t.Cleanup(srv.Close)
+	return Source{LatestURL: srv.URL + "/latest", DownloadURL: srv.URL + "/download/"}
+}
+
+func TestInstall(t *testing.T) {
+	linux := tarGz(t, entry{"clarity", tar.TypeReg, "linux build"})
+	windows := zipArchive(t, entry{"clarity.exe", tar.TypeReg, "windows build"})
+	sums := append(checksum("clarity-cli_linux_amd64.tar.gz", linux), checksum("clarity-cli_windows_arm64.zip", windows)...)
+	src := releaseServer(t, map[string][]byte{"checksums.txt": sums, "clarity-cli_linux_amd64.tar.gz": linux, "clarity-cli_windows_arm64.zip": windows})
+	ctx := context.Background()
+
+	r, err := src.Latest(ctx)
+	if err != nil || r.Tag != "v0.1.3" || r.URL != "https://github.com/piyush-gambhir/clarity-cli/releases/tag/v0.1.3" {
+		t.Fatalf("latest %+v %v", r, err)
+	}
+	exe := writeExe(t, "old")
+	if err := src.Install(ctx, "v0.1.3", Target{GOOS: "linux", GOARCH: "amd64", Exe: exe}); err != nil {
+		t.Fatal(err)
+	}
+	assertFile(t, exe, "linux build")
+	winExe := writeExe(t, "old")
+	if err := src.Install(ctx, "v0.1.3", Target{GOOS: "windows", GOARCH: "arm64", Exe: winExe}); err != nil {
+		t.Fatal(err)
+	}
+	assertFile(t, winExe, "windows build")
+	assertFile(t, winExe+".old", "old")
+
+	// Missing assets and checksum mismatches leave the installed binary alone.
+	keep := writeExe(t, "old")
+	if err := src.Install(ctx, "v0.1.3", Target{GOOS: "darwin", GOARCH: "arm64", Exe: keep}); err == nil || !strings.Contains(err.Error(), "no clarity-cli_darwin_arm64.tar.gz asset") {
+		t.Fatalf("missing asset: %v", err)
+	}
+	bad := releaseServer(t, map[string][]byte{"checksums.txt": checksum("clarity-cli_linux_amd64.tar.gz", []byte("other")), "clarity-cli_linux_amd64.tar.gz": linux})
+	if err := bad.Install(ctx, "v0.1.3", Target{GOOS: "linux", GOARCH: "amd64", Exe: keep}); err == nil || !strings.Contains(err.Error(), "checksum") {
+		t.Fatalf("mismatch: %v", err)
+	}
+	assertFile(t, keep, "old")
+	assertOnly(t, filepath.Dir(keep), "clarity")
+}
+
+func TestLatestRejectsInvalidTag(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"tag_name":"v1.0.0\u001b[31m"}`)
+	}))
+	defer srv.Close()
+	if _, err := (Source{LatestURL: srv.URL}).Latest(context.Background()); err == nil {
+		t.Fatal("accepted invalid tag")
+	}
+}
+
+func TestNewer(t *testing.T) {
+	for _, tc := range []struct {
+		latest, current string
+		want            bool
+	}{
+		{"v0.1.3", "0.1.2", true}, {"v0.2.0", "v0.1.9", true}, {"v0.1.10", "0.1.9", true}, {"v1.0.0", "1.0.0-rc.1", true},
+		{"v0.1.2", "0.1.2", false}, {"v0.1.2", "0.1.3", false}, {"v0.1.3", "dev", false}, {"", "0.1.2", false},
+	} {
+		if got := Newer(tc.latest, tc.current); got != tc.want {
+			t.Errorf("Newer(%q, %q) = %v", tc.latest, tc.current, got)
+		}
+	}
+}
+
+func TestNoticeOncePerVersionPerDay(t *testing.T) {
+	now := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	c := Cache{CheckedAt: now.Add(-time.Hour), LatestVersion: "v0.1.3"}
+	if !c.Fresh(now) || c.Fresh(now.Add(CheckInterval)) || c.Fresh(now.Add(-2*time.Hour)) {
+		t.Fatal("fresh window is wrong")
+	}
+	if !c.ShouldNotify("0.1.2", now) || c.ShouldNotify("0.1.3", now) || c.ShouldNotify("dev", now) {
+		t.Fatal("notify depends on a newer release")
+	}
+	c.NotifiedVersion, c.NotifiedAt = "v0.1.3", now
+	if c.ShouldNotify("0.1.2", now.Add(23*time.Hour)) {
+		t.Fatal("notified twice within a day")
+	}
+	if !c.ShouldNotify("0.1.2", now.Add(25*time.Hour)) {
+		t.Fatal("no notice after a day")
+	}
+	c.LatestVersion = "v0.1.4"
+	if !c.ShouldNotify("0.1.2", now.Add(time.Minute)) {
+		t.Fatal("no notice for a newer release")
+	}
+
+	path := filepath.Join(t.TempDir(), "sub", CacheFile)
+	if err := c.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	if got := LoadCache(path); got != c {
+		t.Fatalf("round trip %+v != %+v", got, c)
+	}
+	if err := os.WriteFile(path, []byte(`{"latest_version":"v9.9.9\u001b]0;x\u0007"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := LoadCache(path); got.LatestVersion != "" {
+		t.Fatalf("kept unsafe version %q", got.LatestVersion)
+	}
+}
+
+func TestNoticeText(t *testing.T) {
+	want := "A new version of clarity is available: v0.1.2 -> v0.1.3\nUpdate with: clarity update\nRelease notes: https://github.com/piyush-gambhir/clarity-cli/releases/tag/v0.1.3\n"
+	if got := Notice("0.1.2", "v0.1.3", false); got != want {
+		t.Fatalf("got %q", got)
+	}
+	if got := Notice("0.1.2", "v0.1.3", true); !strings.Contains(got, "Update with: "+SourceUpdate+"\n") {
+		t.Fatalf("go bin notice %q", got)
+	}
+}
+
+func TestInGoBin(t *testing.T) {
+	gobin, gopath, home := t.TempDir(), t.TempDir(), t.TempDir()
+	for _, d := range []string{filepath.Join(gopath, "bin"), filepath.Join(home, "go", "bin")} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("GOBIN", gobin)
+	t.Setenv("GOPATH", gopath)
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	for dir, want := range map[string]bool{gobin: true, filepath.Join(gopath, "bin"): true, filepath.Join(home, "go", "bin"): true, t.TempDir(): false, gopath: false} {
+		if got := InGoBin(filepath.Join(dir, "clarity")); got != want {
+			t.Errorf("InGoBin(%s) = %v", dir, got)
+		}
 	}
 }
