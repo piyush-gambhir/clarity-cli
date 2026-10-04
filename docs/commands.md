@@ -74,6 +74,7 @@ Save a project token (hidden prompt, environment, or stdin)
 Save a token generated in Clarity → Settings → Data Export.
 This saves locally without making an API request unless --verify is set.
 --verify consumes one Export API request; that API allows 10 per project per day.
+Without --profile or CLARITY_PROFILE, the token goes to the current profile ("default" if none is set).
 An existing profile's token is replaced, and the profile becomes current.
 
 ```text
@@ -215,6 +216,7 @@ Save a project token (hidden prompt, environment, or stdin)
 Save a token generated in Clarity → Settings → Data Export.
 This saves locally without making an API request unless --verify is set.
 --verify consumes one Export API request; that API allows 10 per project per day.
+Without --profile or CLARITY_PROFILE, the token goes to the current profile ("default" if none is set).
 An existing profile's token is replaced, and the profile becomes current.
 
 ```text

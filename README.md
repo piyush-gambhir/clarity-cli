@@ -105,7 +105,7 @@ Credentials resolve in order: `--token` → `CLARITY_API_TOKEN` → selected sav
 
 Config lives at `~/.config/clarity-cli/config.yaml`, respecting `XDG_CONFIG_HOME`. `CLARITY_CONFIG` overrides the full path. Local writes are locked and atomic. Unix credentials are stored in an owner-readable/writable file (0600); they are plaintext, not encrypted. Windows uses the user's filesystem ACLs. Tokens never appear in `auth status`, profile lists, or verbose request logs.
 
-`auth login --verify` verifies before saving. `auth status --verify` checks the resolved token. Each verification consumes one Export API request; ordinary login/status are local only. Login replaces the selected profile and makes it current. Logout removes only the local saved token; revoke or rotate it in Clarity as needed. There is no automatic token refresh.
+`auth login --verify` verifies before saving. `auth status --verify` checks the resolved token. Each verification consumes one Export API request; ordinary login/status are local only. Login uses the same profile selection, falling back to `default` when no current profile is saved, replaces that profile's token, and makes it current. Logout removes only the local saved token; revoke or rotate it in Clarity as needed. There is no automatic token refresh.
 
 For CI, set `CLARITY_API_TOKEN` through your secret manager and use `--no-input`; saving a profile is optional. The CLI has no background update or authentication calls.
 
