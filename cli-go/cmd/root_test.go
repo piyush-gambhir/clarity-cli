@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/piyush-gambhir/clarity-cli/cli-go/internal/client"
+	"github.com/piyush-gambhir/clarity-cli/cli-go/internal/config"
 )
 
 type roundTrip func(*http.Request) (*http.Response, error)
@@ -130,5 +131,66 @@ func TestBlankEnvironmentTokenFailsReadably(t *testing.T) {
 	}
 	if !strings.Contains(errOut.String(), "CLARITY_API_TOKEN is blank") {
 		t.Fatalf("stderr=%q", errOut.String())
+	}
+}
+
+func TestLoginProfileSelection(t *testing.T) {
+	seeded := func(t *testing.T) {
+		t.Helper()
+		path, err := config.Path()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := config.Update(context.Background(), path, func(c *config.Config) error {
+			c.Profiles["default"] = config.Profile{Token: "old-default"}
+			c.Profiles["prod"] = config.Profile{Token: "old-prod"}
+			c.CurrentProfile = "prod"
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		name, flag, env, want string
+		seed                  bool
+	}{
+		{name: "default when nothing saved", want: "default"},
+		{name: "saved current profile", seed: true, want: "prod"},
+		{name: "environment over current", seed: true, env: "staging", want: "staging"},
+		{name: "flag over environment", seed: true, env: "staging", flag: "qa", want: "qa"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			isolate(t)
+			if tc.seed {
+				seeded(t)
+			}
+			t.Setenv("CLARITY_PROFILE", tc.env)
+			args := []string{"auth", "login", "--token-stdin", "--no-input", "-o", "json"}
+			if tc.flag != "" {
+				args = append(args, "--profile", tc.flag)
+			}
+			var out, errOut bytes.Buffer
+			if code := Run(context.Background(), args, strings.NewReader("new-token\n"), &out, &errOut); code != 0 {
+				t.Fatalf("login: %d %s", code, errOut.String())
+			}
+			var got struct{ Profile string }
+			if err := json.Unmarshal(out.Bytes(), &got); err != nil || got.Profile != tc.want {
+				t.Fatalf("login output %q, want profile %q", out.String(), tc.want)
+			}
+			path, _ := config.Path()
+			cfg, err := config.Load(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.CurrentProfile != tc.want || cfg.Profiles[tc.want].Token != "new-token" {
+				t.Fatalf("current %q, %q token %q; want %q current with new token", cfg.CurrentProfile, tc.want, cfg.Profiles[tc.want].Token, tc.want)
+			}
+			// Other saved profiles keep their tokens.
+			for name, old := range map[string]string{"default": "old-default", "prod": "old-prod"} {
+				if tc.seed && name != tc.want && cfg.Profiles[name].Token != old {
+					t.Fatalf("login to %q overwrote profile %q", tc.want, name)
+				}
+			}
+		})
 	}
 }

@@ -21,13 +21,21 @@ func (a *app) auth() *cobra.Command {
 func (a *app) login() *cobra.Command {
 	var stdin, verify bool
 	c := &cobra.Command{Use: "login", Short: "Save a project token (hidden prompt, environment, or stdin)", Args: cobra.NoArgs,
-		Long:        "Save a token generated in Clarity → Settings → Data Export.\nThis saves locally without making an API request unless --verify is set.\n--verify consumes one Export API request; that API allows 10 per project per day.\nAn existing profile's token is replaced, and the profile becomes current.",
+		Long:        "Save a token generated in Clarity → Settings → Data Export.\nThis saves locally without making an API request unless --verify is set.\n--verify consumes one Export API request; that API allows 10 per project per day.\nWithout --profile or CLARITY_PROFILE, the token goes to the current profile (\"default\" if none is set).\nAn existing profile's token is replaced, and the profile becomes current.",
 		Example:     "  clarity auth login --profile website\n  clarity auth login --profile website --token-stdin < token.txt\n  CLARITY_API_TOKEN=... clarity auth login --no-input --profile website",
 		Annotations: map[string]string{"writes-local": "true"},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, _, err := a.load()
+			if err != nil {
+				return err
+			}
+			// Same selection as every other command, plus a first-login fallback.
 			name := a.profile
 			if name == "" {
 				name = os.Getenv("CLARITY_PROFILE")
+			}
+			if name == "" {
+				name = cfg.CurrentProfile
 			}
 			if name == "" {
 				name = "default"
