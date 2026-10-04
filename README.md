@@ -62,7 +62,7 @@ Update with: clarity update
 Release notes: https://github.com/piyush-gambhir/clarity-cli/releases/tag/v0.1.3
 ```
 
-The check runs in the background and never delays a command; a notice for the same release is shown at most once a day. It only runs in interactive terminals: never when stderr is not a terminal, when `CI` is set, with `--quiet`/`CLARITY_QUIET`, for development builds, or for `update`, `version`, `completion`, and `help`. Turn it off with `CLARITY_NO_UPDATE_NOTIFIER=1` or `NO_UPDATE_NOTIFIER=1`. The result is cached in `update-check.json` next to the config file; `clarity version` shows the cached latest release without contacting GitHub.
+The check runs in the background and never delays a command; a notice for the same release is shown at most once a day. It only runs in interactive terminals: never when stderr is not a terminal, when `CI` is set, with `--quiet`/`CLARITY_QUIET`, for development builds, or for `update`, `version`, `completion`, and `help`. Turn it off with `CLARITY_NO_UPDATE_NOTIFIER=1` or `NO_UPDATE_NOTIFIER=1`. The result is cached in `update-check.json` next to the config file; `clarity version` shows the cached latest release without contacting GitHub. The check and `clarity update` read the tag that the `releases/latest` page redirects to rather than calling the GitHub REST API, so shared networks (offices, VPNs, CI runners) do not run into its per-IP rate limit.
 
 ## Quick start
 

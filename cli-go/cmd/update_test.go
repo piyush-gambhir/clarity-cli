@@ -51,11 +51,12 @@ func newUpdateEnv(t *testing.T, version string) *updateEnv {
 	e := &updateEnv{hits: new(atomic.Int32), terminal: true}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/latest":
+		case "/releases/latest":
 			e.hits.Add(1)
 			c := update.LoadCache(e.cache)
 			e.atLookup.Store(&c)
-			fmt.Fprint(w, `{"tag_name":"v0.1.3"}`)
+			w.Header().Set("Location", "/releases/tag/v0.1.3")
+			w.WriteHeader(http.StatusFound)
 		case "/download/v0.1.3/checksums.txt":
 			fmt.Fprint(w, sums)
 		case "/download/v0.1.3/" + asset:
@@ -65,7 +66,7 @@ func newUpdateEnv(t *testing.T, version string) *updateEnv {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	e.src = update.Source{LatestURL: srv.URL + "/latest", DownloadURL: srv.URL + "/download/"}
+	e.src = update.Source{LatestURL: srv.URL + "/releases/latest", DownloadURL: srv.URL + "/download/"}
 	e.exe = filepath.Join(t.TempDir(), "clarity")
 	if err := os.WriteFile(e.exe, []byte("old build"), 0o755); err != nil {
 		t.Fatal(err)
