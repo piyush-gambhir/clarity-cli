@@ -10,7 +10,8 @@ import (
 
 var SortOptions = []string{"SessionStart_DESC", "SessionStart_ASC", "SessionDuration_ASC", "SessionDuration_DESC", "SessionClickCount_ASC", "SessionClickCount_DESC", "PageCount_ASC", "PageCount_DESC"}
 
-// Schema mirrors microsoft/clarity-mcp-server/src/types.ts, checked 2026-09-20.
+// FilterKinds maps each recording filter field to its value kind. The schema mirrors
+// microsoft/clarity-mcp-server/src/types.ts, checked 2026-09-20.
 var FilterKinds = func() map[string]string {
 	m := map[string]string{"date": "date"}
 	for kind, fields := range map[string]string{

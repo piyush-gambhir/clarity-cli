@@ -24,7 +24,7 @@ func (a *app) recordings() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filters := map[string]any{}
 			if file != "" {
-				var r io.Reader = a.in
+				r := a.in
 				if file != "-" {
 					f, err := os.Open(file)
 					if err != nil {

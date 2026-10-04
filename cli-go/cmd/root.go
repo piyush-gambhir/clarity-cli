@@ -98,7 +98,8 @@ func Run(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer
 	if err := root.ExecuteContext(ctx); err != nil {
 		message := err.Error()
 		for _, secret := range []string{a.token, os.Getenv("CLARITY_API_TOKEN")} {
-			if secret != "" {
+			// Tokens are used trimmed; a blank value is not a secret to redact.
+			if secret = strings.TrimSpace(secret); secret != "" {
 				message = strings.ReplaceAll(message, secret, "[REDACTED]")
 			}
 		}
