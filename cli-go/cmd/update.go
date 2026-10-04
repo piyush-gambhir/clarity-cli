@@ -40,12 +40,15 @@ If the executable's directory is not writable, nothing changes: re-run with sudo
 or reinstall with the install script into a writable directory. A build in a Go
 bin directory ($GOBIN, $GOPATH/bin, ~/go/bin) is not replaced; update prints the
 source install command instead. --check only reports and works with --read-only.
+Both record the latest release for the update notice.
 
 Update notice: at most once a day, in an interactive terminal, clarity checks
 GitHub for a newer release in the background and prints a short notice on stderr
-after the command's output. It never runs when stderr is not a terminal, when CI
-is set, with --quiet, for development builds, or for update, version, completion,
-and help. Turn it off with CLARITY_NO_UPDATE_NOTIFIER=1 or NO_UPDATE_NOTIFIER=1.`,
+after the command's output. If the command finishes first, it waits at most one
+second for that day's answer; otherwise it never delays output. It never runs
+when stderr is not a terminal, when CI is set, with --quiet, for development
+builds, or for update, version, completion, and help. Turn it off with
+CLARITY_NO_UPDATE_NOTIFIER=1 or NO_UPDATE_NOTIFIER=1.`,
 		Example: "  clarity update --check\n  clarity update --check -o json\n  clarity update --yes",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if a.readOnly && !check {
@@ -54,6 +57,10 @@ and help. Turn it off with CLARITY_NO_UPDATE_NOTIFIER=1 or NO_UPDATE_NOTIFIER=1.
 			r, err := a.releases.Latest(cmd.Context())
 			if err != nil {
 				return err
+			}
+			// Share the answer with the update notice so the two never disagree.
+			if path, err := updateCachePath(); err == nil {
+				saveLatest(path, r.Tag)
 			}
 			current := update.Display(build.Version)
 			s := updateStatus{
@@ -98,9 +105,6 @@ and help. Turn it off with CLARITY_NO_UPDATE_NOTIFIER=1 or NO_UPDATE_NOTIFIER=1.
 			if err := a.releases.Install(cmd.Context(), r.Tag, update.Target{GOOS: runtime.GOOS, GOARCH: runtime.GOARCH, Exe: exe}); err != nil {
 				return err
 			}
-			if path, err := updateCachePath(); err == nil {
-				_ = os.Remove(path)
-			}
 			s.Updated = true
 			return a.result(s, fmt.Sprintf("Updated clarity %s -> %s\nRelease notes: %s", current, r.Tag, r.URL))
 		}}
@@ -124,6 +128,10 @@ func (a *app) result(s updateStatus, text string) error {
 	}
 	return a.print(s)
 }
+
+// noticeWait bounds how long a command that started the day's release lookup
+// waits for it before exiting, so a fast command does not lose the answer.
+const noticeWait = time.Second
 
 // updateCheck carries the background release check from PersistentPreRun to PersistentPostRun.
 type updateCheck struct {
@@ -149,10 +157,10 @@ func (a *app) startUpdateCheck(cmd *cobra.Command) {
 		return
 	}
 	c := &updateCheck{done: make(chan struct{}), path: path}
-	a.check = c
 	cache := update.LoadCache(path)
 	if cache.Fresh(time.Now()) {
 		close(c.done)
+		a.check = c
 		return
 	}
 	// Record the attempt before the request: a lookup that fails, or that the
@@ -162,6 +170,7 @@ func (a *app) startUpdateCheck(cmd *cobra.Command) {
 	if cache.Save(path) != nil {
 		return
 	}
+	a.check = c
 	ctx := cmd.Context()
 	go func() {
 		defer close(c.done)
@@ -171,15 +180,22 @@ func (a *app) startUpdateCheck(cmd *cobra.Command) {
 		if err != nil {
 			return
 		}
-		// Reload so a notice another command recorded meanwhile is kept.
-		cache := update.LoadCache(path)
-		cache.CheckedAt, cache.LatestVersion = time.Now(), r.Tag
-		_ = cache.Save(path)
+		saveLatest(path, r.Tag)
 	}()
 }
 
-// printUpdateNotice prints the notice only if the check has already finished;
-// it never delays the command.
+// saveLatest records a successful release lookup, reloading the cache so a
+// notice another command recorded meanwhile is kept.
+func saveLatest(path, tag string) {
+	cache := update.LoadCache(path)
+	cache.CheckedAt, cache.LatestVersion = time.Now(), tag
+	_ = cache.Save(path)
+}
+
+// printUpdateNotice prints the notice once the check has finished. A cached
+// answer is ready at once; the day's lookup gets at most noticeWait, because the
+// attempt is already recorded and an answer lost on exit would hide the notice
+// for a day.
 func (a *app) printUpdateNotice() {
 	c := a.check
 	if c == nil {
@@ -187,7 +203,7 @@ func (a *app) printUpdateNotice() {
 	}
 	select {
 	case <-c.done:
-	default:
+	case <-time.After(noticeWait):
 		return
 	}
 	// Read the cache now, not at start, so commands that ran meanwhile and
