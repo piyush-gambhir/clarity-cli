@@ -14,4 +14,6 @@ Use the installed `clarity` binary; check subcommand `--help` for flags. The ful
 - `recordings list` returns a sample, at most 250 sessions. Do not represent that sample as all sessions or infer population rates from it. Use `recordings filters -o json` for supported fields; use `--filters-file` for advanced filters.
 - `docs search` makes an authenticated request for Clarity documentation snippets.
 - All remote commands read data. `auth login/logout/use` change local credentials/configuration, and `update` changes the executable. Stay within the user's requested project and action.
+- Run `update` only when the user asks. `clarity update --check -o json` reports `current_version`, `latest_version`, `update_available`, `release_url`, and `install_method` without changing anything; `clarity update --yes` installs (it is required with `--no-input`) on macOS, Linux, and Windows.
+- Release builds may print a short update notice on stderr after a command, at most once a day, only when stderr is a terminal. It never appears when stderr is captured, `CI` is set, or `CLARITY_NO_UPDATE_NOTIFIER=1`/`NO_UPDATE_NOTIFIER=1` is set; it is not part of command output.
 - Setup requires a user-provided project token. Use hidden login input, stdin, or environment secrets; do not invent credentials or place them in reports.

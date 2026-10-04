@@ -42,7 +42,27 @@ sh install.sh
 # Optional: VERSION=v0.1.2 INSTALL_DIR="$HOME/.local/bin" sh install.sh
 ```
 
-The installer supports macOS/Linux amd64 and arm64 and verifies SHA-256 checksums. Windows release archives contain `clarity.exe` (amd64/arm64). On Windows, replace the executable manually to update.
+The installer supports macOS/Linux amd64 and arm64 and verifies SHA-256 checksums. Windows release archives contain `clarity.exe` (amd64/arm64).
+
+## Updating
+
+```bash
+clarity update --check          # compare with the latest release (add -o json for scripts)
+clarity update                  # asks "Update now? [Y/n]" in a terminal
+clarity update --yes            # no prompt; required with --no-input
+```
+
+`clarity update` works on macOS, Linux, and Windows. It downloads this platform's release archive, verifies its SHA-256 checksum against the release's `checksums.txt`, extracts only the `clarity` binary, and replaces the running executable atomically. On Windows the running `clarity.exe` is renamed to `clarity.exe.old` and the new one takes its place; the leftover is deleted on a later start. If the executable's directory is not writable (for example `/usr/local/bin`), nothing changes: re-run with `sudo`, or reinstall with the install script into a writable directory. A copy in a Go bin directory (`$GOBIN`, `$GOPATH/bin`, `~/go/bin`) is a source build, so `update` prints the source update command (`git pull && make install` in your checkout) instead of replacing it. `--read-only` blocks installing; `update --check` stays available.
+
+Release builds check GitHub for a newer release at most once a day and print a short notice on stderr after the command's output:
+
+```text
+A new version of clarity is available: v0.1.2 -> v0.1.3
+Update with: clarity update
+Release notes: https://github.com/piyush-gambhir/clarity-cli/releases/tag/v0.1.3
+```
+
+The check runs in the background and never delays a command; a notice for the same release is shown at most once a day. It only runs in interactive terminals: never when stderr is not a terminal, when `CI` is set, with `--quiet`/`CLARITY_QUIET`, for development builds, or for `update`, `version`, `completion`, and `help`. Turn it off with `CLARITY_NO_UPDATE_NOTIFIER=1` or `NO_UPDATE_NOTIFIER=1`. The result is cached in `update-check.json` next to the config file; `clarity version` shows the cached latest release without contacting GitHub.
 
 ## Quick start
 
@@ -85,8 +105,8 @@ No MCP server, Node.js process, or LLM API key is required. The CLI calls the HT
 | `recordings filters` | Inspect the JSON filter schema offline |
 | `docs search QUESTION` | Search Clarity's documentation |
 | `completion bash\|zsh\|fish\|powershell` | Generate shell completion |
-| `version` | Version, commit, and build date |
-| `update [--check]` | Check/install a published release |
+| `version` | Version, commit, build date, and the last known latest release |
+| `update [--check] [--yes]` | Check for or install the latest release (macOS, Linux, Windows) |
 
 The complete [command and flag reference](docs/commands.md) is generated from the command tree with `make docs`.
 
@@ -107,7 +127,7 @@ Config lives at `~/.config/clarity-cli/config.yaml`, respecting `XDG_CONFIG_HOME
 
 `auth login --verify` verifies before saving. `auth status --verify` checks the resolved token. Each verification consumes one Export API request; ordinary login/status are local only. Login uses the same profile selection, falling back to `default` when no current profile is saved, replaces that profile's token, and makes it current. Logout removes only the local saved token; revoke or rotate it in Clarity as needed. There is no automatic token refresh.
 
-For CI, set `CLARITY_API_TOKEN` through your secret manager and use `--no-input`; saving a profile is optional. The CLI has no background update or authentication calls.
+For CI, set `CLARITY_API_TOKEN` through your secret manager and use `--no-input`; saving a profile is optional. The CLI makes no background authentication calls. Its only background request is the once-a-day GitHub release check, which runs only in interactive terminals and never in CI (see [Updating](#updating)).
 
 | Environment variable | Meaning |
 | --- | --- |
@@ -119,6 +139,8 @@ For CI, set `CLARITY_API_TOKEN` through your secret manager and use `--no-input`
 | `CLARITY_QUIET` | Suppress informational stderr messages |
 | `CLARITY_VERBOSE` | Log method/URL/status, not headers or request bodies |
 | `CLARITY_READ_ONLY` | Block local credential modifications and self-update |
+| `CLARITY_NO_UPDATE_NOTIFIER`, `NO_UPDATE_NOTIFIER` | Any non-empty value turns off the update check and notice |
+| `CI` | Any non-empty value turns off the update check and notice |
 
 ## Output and automation
 

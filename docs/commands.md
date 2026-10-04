@@ -309,19 +309,46 @@ clarity status [flags]
 
 ## clarity update
 
-Install the latest GitHub release after SHA-256 verification
+Check for or install the latest release
+
+Check for or install the latest clarity release from GitHub.
+
+update downloads this platform's release archive (tar.gz on macOS and Linux, zip
+on Windows), verifies its SHA-256 checksum against the release's checksums.txt,
+and replaces the running executable. On Windows the running clarity.exe is renamed
+to clarity.exe.old and the leftover is removed on a later start. In a terminal it
+asks before installing; --yes skips the prompt and is required with --no-input.
+If the executable's directory is not writable, nothing changes: re-run with sudo
+or reinstall with the install script into a writable directory. A build in a Go
+bin directory ($GOBIN, $GOPATH/bin, ~/go/bin) is not replaced; update prints the
+source install command instead. --check only reports and works with --read-only.
+
+Update notice: at most once a day, in an interactive terminal, clarity checks
+GitHub for a newer release in the background and prints a short notice on stderr
+after the command's output. It never runs when stderr is not a terminal, when CI
+is set, with --quiet, for development builds, or for update, version, completion,
+and help. Turn it off with CLARITY_NO_UPDATE_NOTIFIER=1 or NO_UPDATE_NOTIFIER=1.
 
 ```text
 clarity update [flags]
 ```
 
+```bash
+  clarity update --check
+  clarity update --check -o json
+  clarity update --yes
+```
+
 ```text
-      --check   Only check the latest published release
+      --check   Only report the latest release (always queries GitHub)
+  -y, --yes     Install without asking for confirmation
 ```
 
 ## clarity version
 
 Print build information
+
+Print build information. When an earlier update check found the latest release, also show it and whether an update is available (from the cache only, never the network).
 
 ```text
 clarity version
