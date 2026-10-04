@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -235,9 +236,10 @@ func TestReplaceUnwritableDirectoryKeepsOldBinary(t *testing.T) {
 
 func releaseServer(t *testing.T, assets map[string][]byte) Source {
 	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/latest" {
-			fmt.Fprint(w, `{"tag_name":"v0.1.3","html_url":"https://example.com/ignored"}`)
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/releases/latest" {
+			http.Redirect(w, r, srv.URL+"/releases/tag/v0.1.3", http.StatusFound)
 			return
 		}
 		b, ok := assets[strings.TrimPrefix(r.URL.Path, "/download/v0.1.3/")]
@@ -248,7 +250,7 @@ func releaseServer(t *testing.T, assets map[string][]byte) Source {
 		w.Write(b)
 	}))
 	t.Cleanup(srv.Close)
-	return Source{LatestURL: srv.URL + "/latest", DownloadURL: srv.URL + "/download/"}
+	return Source{LatestURL: srv.URL + "/releases/latest", DownloadURL: srv.URL + "/download/"}
 }
 
 func TestInstall(t *testing.T) {
@@ -287,13 +289,54 @@ func TestInstall(t *testing.T) {
 	assertOnly(t, filepath.Dir(keep), "clarity")
 }
 
-func TestLatestRejectsInvalidTag(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"tag_name":"v1.0.0\u001b[31m"}`)
-	}))
-	defer srv.Close()
-	if _, err := (Source{LatestURL: srv.URL}).Latest(context.Background()); err == nil {
-		t.Fatal("accepted invalid tag")
+func TestLatestReadsRedirectWithoutFollowing(t *testing.T) {
+	var followed atomic.Bool
+	for _, tc := range []struct {
+		name, location string // SRV in location is the test server's origin
+		status         int
+		want           string // tag, or a substring of the error
+	}{
+		{"good tag", "SRV/o/r/releases/tag/v0.1.3", http.StatusFound, "v0.1.3"},
+		{"relative location", "/o/r/releases/tag/v1.2.0-rc.1", http.StatusFound, "v1.2.0-rc.1"},
+		{"missing location", "", http.StatusFound, "did not name a release"},
+		{"foreign host", "https://example.com/o/r/releases/tag/v0.1.3", http.StatusFound, "unexpected release redirect"},
+		{"other repo", "SRV/x/r/releases/tag/v0.1.3", http.StatusFound, "unexpected release redirect"},
+		{"non-semver tag", "SRV/o/r/releases/tag/nightly", http.StatusFound, "not a version"},
+		{"escape in tag", "SRV/o/r/releases/tag/v1.0.0%1B%5B31m", http.StatusFound, "not a version"},
+		{"nested path", "SRV/o/r/releases/tag/v0.1.3/extra", http.StatusFound, "not a version"},
+		{"no redirect", "", http.StatusOK, "got HTTP 200"},
+		{"rate limited", "", http.StatusForbidden, "got HTTP 403"},
+		{"no release", "", http.StatusNotFound, "no published release"},
+	} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/o/r/releases/latest" {
+				followed.Store(true)
+				return
+			}
+			if tc.location != "" {
+				w.Header().Set("Location", strings.ReplaceAll(tc.location, "SRV", "http://"+r.Host))
+			}
+			w.WriteHeader(tc.status)
+		}))
+		r, err := Source{LatestURL: srv.URL + "/o/r/releases/latest"}.Latest(context.Background())
+		srv.Close()
+		switch {
+		case strings.HasPrefix(tc.want, "v"):
+			if err != nil || r.Tag != tc.want || r.URL != ReleaseURL(tc.want) {
+				t.Errorf("%s: %+v %v", tc.name, r, err)
+			}
+		case err == nil || !strings.Contains(err.Error(), tc.want):
+			t.Errorf("%s: %+v %v, want error containing %q", tc.name, r, err, tc.want)
+		}
+	}
+	if followed.Load() {
+		t.Fatal("followed the release redirect")
+	}
+}
+
+func TestGitHubSourceAvoidsAPI(t *testing.T) {
+	if GitHub.LatestURL != "https://github.com/"+Repo+"/releases/latest" || strings.Contains(GitHub.LatestURL+GitHub.DownloadURL, "api.github.com") {
+		t.Fatalf("GitHub = %+v", GitHub)
 	}
 }
 
