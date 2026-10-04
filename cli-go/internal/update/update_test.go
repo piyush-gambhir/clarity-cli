@@ -133,6 +133,15 @@ func TestExtractRefusesUnsafeArchives(t *testing.T) {
 	}
 }
 
+func TestExtractBoundsSkippedEntries(t *testing.T) {
+	defer func(n int64) { maxExtracted = n }(maxExtracted)
+	maxExtracted = 1 << 20
+	bomb := tarGz(t, entry{"clarity", tar.TypeReg, "binary"}, entry{"README.md", tar.TypeReg, strings.Repeat("0", 2<<20)})
+	if _, err := ExtractBinary(bomb, "linux"); err == nil || !strings.Contains(err.Error(), "size limit") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func writeExe(t *testing.T, content string) string {
 	t.Helper()
 	exe := filepath.Join(t.TempDir(), "clarity")

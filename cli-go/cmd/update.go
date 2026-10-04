@@ -127,10 +127,8 @@ func (a *app) result(s updateStatus, text string) error {
 
 // updateCheck carries the background release check from PersistentPreRun to PersistentPostRun.
 type updateCheck struct {
-	done   chan struct{} // closed once cache and notify are set
-	path   string
-	cache  update.Cache
-	notify bool
+	done chan struct{} // closed once the cache holds this run's result
+	path string
 }
 
 // startUpdateCheck begins the release check behind the update notice. A fresh
@@ -150,29 +148,33 @@ func (a *app) startUpdateCheck(cmd *cobra.Command) {
 	if err != nil {
 		return
 	}
-	current := build.Version
 	c := &updateCheck{done: make(chan struct{}), path: path}
 	a.check = c
 	cache := update.LoadCache(path)
-	finish := func() {
-		c.cache, c.notify = cache, cache.ShouldNotify(current, time.Now())
-		close(c.done)
-	}
 	if cache.Fresh(time.Now()) {
-		finish()
+		close(c.done)
+		return
+	}
+	// Record the attempt before the request: a lookup that fails, or that the
+	// process exits before, counts as the day's check, so GitHub is asked at most
+	// once a day.
+	cache.CheckedAt = time.Now()
+	if cache.Save(path) != nil {
 		return
 	}
 	ctx := cmd.Context()
 	go func() {
+		defer close(c.done)
 		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
-		// A failed lookup is recorded too, so an offline machine does not retry on every command.
-		if r, err := a.releases.Latest(ctx); err == nil {
-			cache.LatestVersion = r.Tag
+		r, err := a.releases.Latest(ctx)
+		if err != nil {
+			return
 		}
-		cache.CheckedAt = time.Now()
+		// Reload so a notice another command recorded meanwhile is kept.
+		cache := update.LoadCache(path)
+		cache.CheckedAt, cache.LatestVersion = time.Now(), r.Tag
 		_ = cache.Save(path)
-		finish()
 	}()
 }
 
@@ -188,13 +190,16 @@ func (a *app) printUpdateNotice() {
 	default:
 		return
 	}
-	if !c.notify {
+	// Read the cache now, not at start, so commands that ran meanwhile and
+	// already showed this release keep it to once a day.
+	cache := update.LoadCache(c.path)
+	if !cache.ShouldNotify(build.Version, time.Now()) {
 		return
 	}
 	exe, err := a.executable()
-	fmt.Fprint(a.errOut, "\n"+update.Notice(build.Version, c.cache.LatestVersion, err == nil && update.InGoBin(exe)))
-	c.cache.NotifiedVersion, c.cache.NotifiedAt = c.cache.LatestVersion, time.Now()
-	_ = c.cache.Save(c.path)
+	fmt.Fprint(a.errOut, "\n"+update.Notice(build.Version, cache.LatestVersion, err == nil && update.InGoBin(exe)))
+	cache.NotifiedVersion, cache.NotifiedAt = cache.LatestVersion, time.Now()
+	_ = cache.Save(c.path)
 }
 
 func updateCachePath() (string, error) {

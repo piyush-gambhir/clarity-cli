@@ -29,6 +29,7 @@ type updateEnv struct {
 	cache    string
 	src      update.Source
 	hits     *atomic.Int32 // requests for the latest release
+	atLookup atomic.Pointer[update.Cache]
 	terminal bool
 }
 
@@ -52,6 +53,8 @@ func newUpdateEnv(t *testing.T, version string) *updateEnv {
 		switch r.URL.Path {
 		case "/latest":
 			e.hits.Add(1)
+			c := update.LoadCache(e.cache)
+			e.atLookup.Store(&c)
 			fmt.Fprint(w, `{"tag_name":"v0.1.3"}`)
 		case "/download/v0.1.3/checksums.txt":
 			fmt.Fprint(w, sums)
@@ -176,6 +179,11 @@ func TestUpdateNoticeOncePerDay(t *testing.T) {
 	}
 	if got := update.LoadCache(e.cache); e.hits.Load() != 1 || got.LatestVersion != "v0.1.3" || !got.Fresh(time.Now()) {
 		t.Fatalf("hits=%d cache=%+v", e.hits.Load(), got)
+	}
+	// The attempt was saved before the request, so a command that exits before
+	// GitHub answers still counts as the day's check.
+	if c := e.atLookup.Load(); c == nil || !c.Fresh(time.Now()) {
+		t.Fatalf("attempt not recorded before the lookup: %+v", c)
 	}
 	// Fresh cache: no network; the notice prints after stdout, once.
 	e.seed(t, update.Cache{CheckedAt: time.Now(), LatestVersion: "v0.1.3"})

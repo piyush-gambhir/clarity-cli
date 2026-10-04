@@ -41,6 +41,9 @@ var (
 	tagPattern     = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
 	releasePattern = regexp.MustCompile(`^v?([0-9]+)\.([0-9]+)\.([0-9]+)(?:-([0-9A-Za-z.-]+))?$`)
 	errNotFound    = errors.New("HTTP 404")
+	// maxExtracted caps the bytes decompressed from a tar.gz, skipped entries
+	// included, so a small archive cannot expand without bound. Tests lower it.
+	maxExtracted int64 = 256 << 20
 	// rename is os.Rename; tests replace it to simulate a failed swap.
 	rename = os.Rename
 )
@@ -200,7 +203,7 @@ func extractTarGz(archive []byte, want string) ([]byte, error) {
 		return nil, err
 	}
 	defer z.Close()
-	r := tar.NewReader(z)
+	r := tar.NewReader(&capReader{r: z, left: maxExtracted})
 	var bin []byte
 	for {
 		h, err := r.Next()
@@ -265,6 +268,20 @@ func extractZip(archive []byte, want string) ([]byte, error) {
 		return nil, fmt.Errorf("release does not contain %s binary", want)
 	}
 	return bin, nil
+}
+
+// capReader fails once more than left bytes have been read.
+type capReader struct {
+	r    io.Reader
+	left int64
+}
+
+func (c *capReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	if c.left -= int64(n); c.left < 0 {
+		return n, fmt.Errorf("release archive expands beyond the size limit")
+	}
+	return n, err
 }
 
 // isEntry reports whether an archive entry is the wanted binary. A release
