@@ -322,12 +322,15 @@ If the executable's directory is not writable, nothing changes: re-run with sudo
 or reinstall with the install script into a writable directory. A build in a Go
 bin directory ($GOBIN, $GOPATH/bin, ~/go/bin) is not replaced; update prints the
 source install command instead. --check only reports and works with --read-only.
+Both record the latest release for the update notice.
 
 Update notice: at most once a day, in an interactive terminal, clarity checks
 GitHub for a newer release in the background and prints a short notice on stderr
-after the command's output. It never runs when stderr is not a terminal, when CI
-is set, with --quiet, for development builds, or for update, version, completion,
-and help. Turn it off with CLARITY_NO_UPDATE_NOTIFIER=1 or NO_UPDATE_NOTIFIER=1.
+after the command's output. If the command finishes first, it waits at most one
+second for that day's answer; otherwise it never delays output. It never runs
+when stderr is not a terminal, when CI is set, with --quiet, for development
+builds, or for update, version, completion, and help. Turn it off with
+CLARITY_NO_UPDATE_NOTIFIER=1 or NO_UPDATE_NOTIFIER=1.
 
 ```text
 clarity update [flags]
