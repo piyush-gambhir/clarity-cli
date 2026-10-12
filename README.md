@@ -24,7 +24,7 @@ Prebuilt macOS/Linux/Windows binaries and checksums are on the [releases page](h
 
 ## Install from source
 
-Requires Go 1.26+; this project selects Go 1.27.1, matching the other CLIs in the suite.
+Requires Go 1.27+; this project selects Go 1.27.2, matching the other CLIs in the suite.
 
 ```bash
 git clone https://github.com/piyush-gambhir/clarity-cli.git
