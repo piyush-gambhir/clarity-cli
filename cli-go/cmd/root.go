@@ -54,6 +54,13 @@ func newRoot(a *app) *cobra.Command {
 		Long:         "Read Microsoft Clarity data using project API tokens.\nExport dashboard metrics, query analytics, find session recordings, and search documentation.\nAll remote operations are read-only. Profiles store one token per project.",
 		SilenceUsage: true, SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// Safety settings from the environment are sticky: an explicit false flag cannot undo them.
+			if envBool("CLARITY_READ_ONLY") {
+				a.readOnly = true
+			}
+			if envBool("CLARITY_NO_INPUT") {
+				a.noInput = true
+			}
 			if !output.Valid(a.format) {
 				return fmt.Errorf("unsupported output %q; use table, json, or yaml", a.format)
 			}
