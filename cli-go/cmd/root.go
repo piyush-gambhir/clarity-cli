@@ -54,6 +54,13 @@ func newRoot(a *app) *cobra.Command {
 		Long:         "Read Microsoft Clarity data using project API tokens.\nExport dashboard metrics, query analytics, find session recordings, and search documentation.\nAll remote operations are read-only. Profiles store one token per project.",
 		SilenceUsage: true, SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// Safety settings from the environment are sticky: an explicit false flag cannot undo them.
+			if envBool("CLARITY_READ_ONLY") {
+				a.readOnly = true
+			}
+			if envBool("CLARITY_NO_INPUT") {
+				a.noInput = true
+			}
 			if !output.Valid(a.format) {
 				return fmt.Errorf("unsupported output %q; use table, json, or yaml", a.format)
 			}
@@ -80,7 +87,7 @@ func newRoot(a *app) *cobra.Command {
 	f.BoolVarP(&a.quiet, "quiet", "q", envBool("CLARITY_QUIET"), "Suppress informational stderr output")
 	f.BoolVarP(&a.verbose, "verbose", "v", envBool("CLARITY_VERBOSE"), "Log request method, URL, and status to stderr (no tokens/bodies)")
 	f.BoolVar(&a.readOnly, "read-only", envBool("CLARITY_READ_ONLY"), "Also block local credential changes and self-update")
-	root.AddCommand(a.auth(), a.export(), a.analytics(), a.recordings(), a.docs(), a.update())
+	root.AddCommand(a.auth(), a.export(), a.analytics(), a.recordings(), a.docs(), a.update(), a.commandsCmd())
 	root.AddCommand(&cobra.Command{Use: "version", Short: "Print build information", Long: "Print build information. When an earlier update check found the latest release, also show it and whether an update is available (from the cache only, never the network).", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
 		info := map[string]any{"version": build.Version, "commit": build.Commit, "date": build.Date}
 		if path, err := updateCachePath(); err == nil {
