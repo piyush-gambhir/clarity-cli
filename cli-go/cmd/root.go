@@ -87,7 +87,7 @@ func newRoot(a *app) *cobra.Command {
 	f.BoolVarP(&a.quiet, "quiet", "q", envBool("CLARITY_QUIET"), "Suppress informational stderr output")
 	f.BoolVarP(&a.verbose, "verbose", "v", envBool("CLARITY_VERBOSE"), "Log request method, URL, and status to stderr (no tokens/bodies)")
 	f.BoolVar(&a.readOnly, "read-only", envBool("CLARITY_READ_ONLY"), "Also block local credential changes and self-update")
-	root.AddCommand(a.auth(), a.export(), a.analytics(), a.recordings(), a.docs(), a.update())
+	root.AddCommand(a.auth(), a.export(), a.analytics(), a.recordings(), a.docs(), a.update(), a.commandsCmd())
 	root.AddCommand(&cobra.Command{Use: "version", Short: "Print build information", Long: "Print build information. When an earlier update check found the latest release, also show it and whether an update is available (from the cache only, never the network).", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, args []string) error {
 		info := map[string]any{"version": build.Version, "commit": build.Commit, "date": build.Date}
 		if path, err := updateCachePath(); err == nil {

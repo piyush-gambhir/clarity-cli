@@ -120,6 +120,26 @@ Set the default project profile
 clarity auth use NAME
 ```
 
+## clarity commands
+
+Offline command discovery for agents
+
+```text
+clarity commands
+```
+
+## clarity commands resolve
+
+Show the command, effect and flags that arguments would run, without running them
+
+```text
+clarity commands resolve -- <arguments>
+```
+
+```bash
+  clarity commands resolve -- sites list
+```
+
 ## clarity completion
 
 Generate shell completion script
