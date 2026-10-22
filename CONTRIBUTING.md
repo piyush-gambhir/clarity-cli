@@ -1,6 +1,6 @@
 # Contributing
 
-Use Go 1.27+ (toolchain Go 1.27.2). From the repository root:
+Use Go 1.27+ (toolchain Go 1.27.3). From the repository root:
 
 ```bash
 make test
