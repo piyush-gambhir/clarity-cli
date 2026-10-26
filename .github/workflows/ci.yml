@@ -10,6 +10,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   test:
+    # Preserve the required check name while pinning the Linux runner.
+    name: test (${{ matrix.os == 'ubuntu-24.04' && 'ubuntu-latest' || matrix.os }})
     strategy:
       fail-fast: false
       matrix:
