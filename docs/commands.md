@@ -5,14 +5,14 @@ Generated from the command tree. Run `make docs` to refresh.
 Global flags apply to every command.
 
 ```text
-      --no-input           Disable interactive prompts
-  -o, --output string      Output format: table, json, yaml (default "table")
-      --profile string     Named project profile (or CLARITY_PROFILE)
-  -q, --quiet              Suppress informational stderr output
-      --read-only          Also block local credential changes and self-update
-      --timeout duration   HTTP request timeout (default 30s)
-      --token string       API token override (prefer CLARITY_API_TOKEN or auth login)
-  -v, --verbose            Log request method, URL, and status to stderr (no tokens/bodies)
+      --no-input[=true|false]    Disable interactive prompts
+  -o, --output string            Output format: table, json, yaml (default "table")
+      --profile string           Named project profile (or CLARITY_PROFILE)
+  -q, --quiet[=true|false]       Suppress informational stderr output
+      --read-only[=true|false]   Also block local credential changes and self-update
+      --timeout duration         HTTP request timeout (default 30s)
+      --token string             API token override (prefer CLARITY_API_TOKEN or auth login)
+  -v, --verbose[=true|false]     Log request method, URL, and status to stderr (no tokens/bodies)
 ```
 
 ## clarity
@@ -88,8 +88,8 @@ clarity auth login [flags]
 ```
 
 ```text
-      --token-stdin   Read token from stdin
-      --verify        Verify remotely before saving (uses one export request)
+      --token-stdin[=true|false]   Read token from stdin
+      --verify[=true|false]        Verify remotely before saving (uses one export request)
 ```
 
 ## clarity auth logout
@@ -109,7 +109,7 @@ clarity auth status [flags]
 ```
 
 ```text
-      --verify   Check remote access (uses one export request)
+      --verify[=true|false]   Check remote access (uses one export request)
 ```
 
 ## clarity auth use
@@ -173,7 +173,7 @@ clarity config show [flags]
 ```
 
 ```text
-      --verify   Check remote access (uses one export request)
+      --verify[=true|false]   Check remote access (uses one export request)
 ```
 
 ## clarity config use-profile
@@ -250,8 +250,8 @@ clarity login [flags]
 ```
 
 ```text
-      --token-stdin   Read token from stdin
-      --verify        Verify remotely before saving (uses one export request)
+      --token-stdin[=true|false]   Read token from stdin
+      --verify[=true|false]        Verify remotely before saving (uses one export request)
 ```
 
 ## clarity recordings
@@ -290,29 +290,29 @@ clarity recordings list [flags]
 ```
 
 ```text
-      --browser stringArray            Filter by browser (repeat flag for multiple values)
-      --campaign stringArray           Filter by campaign (repeat flag for multiple values)
-      --channel stringArray            Filter by channel (repeat flag for multiple values)
-      --city stringArray               Filter by city (repeat flag for multiple values)
-      --count int                      Number of sampled recordings (1–250) (default 100)
-      --country stringArray            Filter by country (repeat flag for multiple values)
-      --days int                       Lookback days; used when start is not specified (default 2)
-      --dead-clicks                    Filter sessions by dead-clicks; explicit =false is supported
-      --device stringArray             Filter by device (repeat flag for multiple values)
-      --end string                     End date/time sent to Clarity (default: now)
-      --event stringArray              Filter by event (repeat flag for multiple values)
-      --excessive-scroll               Filter sessions by excessive-scroll; explicit =false is supported
-      --filters-file string            JSON filters file, or - for stdin
-      --javascript-error stringArray   Filter by javascript-error (repeat flag for multiple values)
-      --medium stringArray             Filter by medium (repeat flag for multiple values)
-      --os stringArray                 Filter by os (repeat flag for multiple values)
-      --quick-backs                    Filter sessions by quick-backs; explicit =false is supported
-      --rage-clicks                    Filter sessions by rage-clicks; explicit =false is supported
-      --sort string                    Sort: SessionStart_DESC, SessionStart_ASC, SessionDuration_ASC, SessionDuration_DESC, SessionClickCount_ASC, SessionClickCount_DESC, PageCount_ASC, PageCount_DESC (default "SessionStart_DESC")
-      --source stringArray             Filter by source (repeat flag for multiple values)
-      --start string                   Start date/time, inclusive interval boundary sent to Clarity
-      --state stringArray              Filter by state (repeat flag for multiple values)
-      --url string                     Match a substring of a visited URL
+      --browser stringArray             Filter by browser (repeat flag for multiple values)
+      --campaign stringArray            Filter by campaign (repeat flag for multiple values)
+      --channel stringArray             Filter by channel (repeat flag for multiple values)
+      --city stringArray                Filter by city (repeat flag for multiple values)
+      --count int                       Number of sampled recordings (1–250) (default 100)
+      --country stringArray             Filter by country (repeat flag for multiple values)
+      --days int                        Lookback days; used when start is not specified (default 2)
+      --dead-clicks[=true|false]        Filter sessions by dead-clicks; explicit =false is supported
+      --device stringArray              Filter by device (repeat flag for multiple values)
+      --end string                      End date/time sent to Clarity (default: now)
+      --event stringArray               Filter by event (repeat flag for multiple values)
+      --excessive-scroll[=true|false]   Filter sessions by excessive-scroll; explicit =false is supported
+      --filters-file string             JSON filters file, or - for stdin
+      --javascript-error stringArray    Filter by javascript-error (repeat flag for multiple values)
+      --medium stringArray              Filter by medium (repeat flag for multiple values)
+      --os stringArray                  Filter by os (repeat flag for multiple values)
+      --quick-backs[=true|false]        Filter sessions by quick-backs; explicit =false is supported
+      --rage-clicks[=true|false]        Filter sessions by rage-clicks; explicit =false is supported
+      --sort string                     Sort: SessionStart_DESC, SessionStart_ASC, SessionDuration_ASC, SessionDuration_DESC, SessionClickCount_ASC, SessionClickCount_DESC, PageCount_ASC, PageCount_DESC (default "SessionStart_DESC")
+      --source stringArray              Filter by source (repeat flag for multiple values)
+      --start string                    Start date/time, inclusive interval boundary sent to Clarity
+      --state stringArray               Filter by state (repeat flag for multiple values)
+      --url string                      Match a substring of a visited URL
 ```
 
 ## clarity status
@@ -324,7 +324,7 @@ clarity status [flags]
 ```
 
 ```text
-      --verify   Check remote access (uses one export request)
+      --verify[=true|false]   Check remote access (uses one export request)
 ```
 
 ## clarity update
@@ -363,8 +363,8 @@ clarity update [flags]
 ```
 
 ```text
-      --check   Only report the latest release (always queries GitHub)
-  -y, --yes     Install without asking for confirmation
+      --check[=true|false]   Only report the latest release (always queries GitHub)
+  -y, --yes[=true|false]     Install without asking for confirmation
 ```
 
 ## clarity version
