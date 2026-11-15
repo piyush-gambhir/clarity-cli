@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	Repo = "piyush-gambhir/clarity-cli"
+	Repo          = "piyush-gambhir/clarity-cli"
 	SourceUpdate  = "git pull && make install (in your clarity-cli checkout)"
 	installScript = "curl -fsSL https://raw.githubusercontent.com/" + Repo + "/main/install.sh | sh"
 	maxArchive    = 64 << 20
@@ -34,11 +34,11 @@ const (
 )
 
 var (
-	tagPattern     = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
-	releasePattern = regexp.MustCompile(`^v?([0-9]+)\.([0-9]+)\.([0-9]+)(?:-([0-9A-Za-z.-]+))?$`)
-	errNotFound    = errors.New("HTTP 404")
-	maxExtracted int64 = 256 << 20
-	rename = os.Rename
+	tagPattern           = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
+	releasePattern       = regexp.MustCompile(`^v?([0-9]+)\.([0-9]+)\.([0-9]+)(?:-([0-9A-Za-z.-]+))?$`)
+	errNotFound          = errors.New("HTTP 404")
+	maxExtracted   int64 = 256 << 20
+	rename               = os.Rename
 )
 
 type Source struct {

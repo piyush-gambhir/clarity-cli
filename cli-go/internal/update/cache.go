@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	CacheFile = "update-check.json"
+	CacheFile     = "update-check.json"
 	CheckInterval = 24 * time.Hour
 )
 

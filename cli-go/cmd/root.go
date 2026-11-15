@@ -26,10 +26,10 @@ type app struct {
 	in                                io.Reader
 	out, errOut                       io.Writer
 	newClient                         func(string, time.Duration) *client.Client
-	releases   update.Source
-	terminal   func(any) bool
-	executable func() (string, error)
-	check      *updateCheck
+	releases                          update.Source
+	terminal                          func(any) bool
+	executable                        func() (string, error)
+	check                             *updateCheck
 }
 
 func envBool(name string) bool { s := os.Getenv(name); return s == "1" || strings.EqualFold(s, "true") }
