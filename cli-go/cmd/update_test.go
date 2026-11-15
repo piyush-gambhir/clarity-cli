@@ -25,18 +25,16 @@ import (
 const notice = "\nA new version of clarity is available: v0.1.2 -> v0.1.3\nUpdate with: clarity update\nRelease notes: https://github.com/piyush-gambhir/clarity-cli/releases/tag/v0.1.3\n"
 
 type updateEnv struct {
-	exe      string // stands in for the running executable
+	exe      string
 	cache    string
 	src      update.Source
-	hits     *atomic.Int32 // requests for the latest release
+	hits     *atomic.Int32
 	atLookup atomic.Pointer[update.Cache]
-	delay    atomic.Int64  // how long the latest-release lookup takes to answer
-	elapsed  time.Duration // how long the last run's command took, excluding the test's own wait
+	delay    atomic.Int64
+	elapsed  time.Duration
 	terminal bool
 }
 
-// newUpdateEnv isolates config and env, sets the build version, and serves
-// latest-release v0.1.3 (plus this platform's archive) from a local server.
 func newUpdateEnv(t *testing.T, version string) *updateEnv {
 	t.Helper()
 	isolate(t)
@@ -104,7 +102,6 @@ func releaseArchive(t *testing.T, goos, content string) []byte {
 	return b.Bytes()
 }
 
-// run executes args and waits for any background check so tests are deterministic.
 func (e *updateEnv) run(t *testing.T, input string, args ...string) (*app, string, string, error) {
 	t.Helper()
 	var out, errOut bytes.Buffer
@@ -179,19 +176,15 @@ func TestUpdateNoticeSuppressed(t *testing.T) {
 
 func TestUpdateNoticeOncePerDay(t *testing.T) {
 	e := newUpdateEnv(t, "0.1.2")
-	// No cache: one background lookup, recorded for the next command.
 	if _, _, _, err := e.run(t, "", "export", "dimensions"); err != nil {
 		t.Fatal(err)
 	}
 	if got := update.LoadCache(e.cache); e.hits.Load() != 1 || got.LatestVersion != "v0.1.3" || !got.Fresh(time.Now()) {
 		t.Fatalf("hits=%d cache=%+v", e.hits.Load(), got)
 	}
-	// The attempt was saved before the request, so a command that exits before
-	// GitHub answers still counts as the day's check.
 	if c := e.atLookup.Load(); c == nil || !c.Fresh(time.Now()) {
 		t.Fatalf("attempt not recorded before the lookup: %+v", c)
 	}
-	// Fresh cache: no network; the notice prints after stdout, once.
 	e.seed(t, update.Cache{CheckedAt: time.Now(), LatestVersion: "v0.1.3"})
 	_, out, errOut, err := e.run(t, "", "export", "dimensions")
 	if err != nil || out == "" || errOut != notice {
@@ -203,14 +196,12 @@ func TestUpdateNoticeOncePerDay(t *testing.T) {
 	if e.hits.Load() != 1 {
 		t.Fatalf("fresh cache hit the network: %d", e.hits.Load())
 	}
-	// A day later it shows again.
 	c := update.LoadCache(e.cache)
 	c.NotifiedAt = time.Now().Add(-25 * time.Hour)
 	e.seed(t, c)
 	if _, _, errOut, _ := e.run(t, "", "export", "dimensions"); errOut != notice {
 		t.Fatalf("no notice after a day: %q", errOut)
 	}
-	// In a Go bin directory the update line points at the source install.
 	t.Setenv("GOBIN", filepath.Dir(e.exe))
 	e.seed(t, update.Cache{CheckedAt: time.Now(), LatestVersion: "v0.1.3"})
 	if _, _, errOut, _ := e.run(t, "", "export", "dimensions"); !strings.Contains(errOut, "Update with: "+update.SourceUpdate+"\n") {
@@ -219,14 +210,11 @@ func TestUpdateNoticeOncePerDay(t *testing.T) {
 }
 
 func TestUpdateNoticeWaitsBrieflyForTheDaysLookup(t *testing.T) {
-	// The attempt is recorded before the lookup, so a fast command that exits
-	// before GitHub answers would hide the notice for a day.
 	e := newUpdateEnv(t, "0.1.2")
 	e.delay.Store(int64(200 * time.Millisecond))
 	if _, out, errOut, err := e.run(t, "", "export", "dimensions"); err != nil || out == "" || errOut != notice {
 		t.Fatalf("err=%v stdout=%q stderr=%q", err, out, errOut)
 	}
-	// A lookup slower than noticeWait costs at most that wait, with no notice.
 	e = newUpdateEnv(t, "0.1.2")
 	e.delay.Store(int64(noticeWait + time.Second))
 	if _, _, errOut, err := e.run(t, "", "export", "dimensions"); err != nil || errOut != "" || e.elapsed > noticeWait+400*time.Millisecond {
@@ -249,7 +237,6 @@ func TestUpdateNoticeFailedCheckIsCached(t *testing.T) {
 
 func TestUpdateCheckJSON(t *testing.T) {
 	e := newUpdateEnv(t, "0.1.2")
-	// --check bypasses a fresh cache that says nothing is newer.
 	e.seed(t, update.Cache{CheckedAt: time.Now(), LatestVersion: "v0.1.2"})
 	check := func() updateStatus {
 		t.Helper()
@@ -268,7 +255,6 @@ func TestUpdateCheckJSON(t *testing.T) {
 	if got := check(); got != want || e.hits.Load() != 1 {
 		t.Fatalf("got %+v hits=%d", got, e.hits.Load())
 	}
-	// The notifier now agrees with --check without asking GitHub again.
 	if _, _, errOut, _ := e.run(t, "", "export", "dimensions"); errOut != notice || e.hits.Load() != 1 {
 		t.Fatalf("notifier after --check: hits=%d stderr=%q", e.hits.Load(), errOut)
 	}
@@ -306,7 +292,6 @@ func TestUpdateConfirmation(t *testing.T) {
 func TestUpdateInstalls(t *testing.T) {
 	e := newUpdateEnv(t, "0.1.2")
 	e.seed(t, update.Cache{CheckedAt: time.Now().Add(-48 * time.Hour), LatestVersion: "v0.1.2"})
-	// Enter accepts the default.
 	_, out, _, err := e.run(t, "\n", "update")
 	if err != nil || out != "Updated clarity v0.1.2 -> v0.1.3\nRelease notes: https://github.com/piyush-gambhir/clarity-cli/releases/tag/v0.1.3\n" {
 		t.Fatalf("err=%v out=%q", err, out)

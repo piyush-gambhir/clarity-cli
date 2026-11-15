@@ -1,5 +1,3 @@
-// Package update finds, verifies, and installs clarity releases from GitHub, and
-// caches the latest release for the update notice.
 package update
 
 import (
@@ -28,15 +26,10 @@ import (
 
 const (
 	Repo = "piyush-gambhir/clarity-cli"
-	// SourceUpdate is how a build in a Go bin directory updates. The main package
-	// lives in cli-go/, so `go install .../cli-go@latest` would install a binary
-	// named cli-go from an untagged commit; the documented source path is make install.
 	SourceUpdate  = "git pull && make install (in your clarity-cli checkout)"
 	installScript = "curl -fsSL https://raw.githubusercontent.com/" + Repo + "/main/install.sh | sh"
 	maxArchive    = 64 << 20
 	maxBinary     = 64 << 20
-	// latestTimeout bounds the release lookup for update; the background check
-	// passes a shorter context deadline.
 	latestTimeout = 15 * time.Second
 )
 
@@ -44,23 +37,15 @@ var (
 	tagPattern     = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
 	releasePattern = regexp.MustCompile(`^v?([0-9]+)\.([0-9]+)\.([0-9]+)(?:-([0-9A-Za-z.-]+))?$`)
 	errNotFound    = errors.New("HTTP 404")
-	// maxExtracted caps the bytes decompressed from a tar.gz, skipped entries
-	// included, so a small archive cannot expand without bound. Tests lower it.
 	maxExtracted int64 = 256 << 20
-	// rename is os.Rename; tests replace it to simulate a failed swap.
 	rename = os.Rename
 )
 
-// Source holds the release endpoints. Tests point it at local servers.
 type Source struct {
-	// LatestURL is the releases/latest page, which redirects to
-	// releases/tag/<tag> on the same host. Reading the redirect avoids the REST
-	// API and its 60 requests/hour per IP limit for unauthenticated clients.
 	LatestURL   string
-	DownloadURL string // prefix for <tag>/<asset> downloads
+	DownloadURL string
 }
 
-// GitHub is the published release source.
 var GitHub = Source{
 	LatestURL:   "https://github.com/" + Repo + "/releases/latest",
 	DownloadURL: "https://github.com/" + Repo + "/releases/download/",
@@ -71,13 +56,10 @@ type Release struct {
 	URL string
 }
 
-// ReleaseURL is the release notes page for a tag.
 func ReleaseURL(tag string) string { return "https://github.com/" + Repo + "/releases/tag/" + tag }
 
-// IsRelease reports whether v is a release version rather than a dev or unknown build.
 func IsRelease(v string) bool { return releasePattern.MatchString(v) }
 
-// Display prefixes release versions with "v"; other builds (such as dev) are shown as is.
 func Display(v string) string {
 	if !IsRelease(v) {
 		return v
@@ -85,7 +67,6 @@ func Display(v string) string {
 	return "v" + strings.TrimPrefix(v, "v")
 }
 
-// Newer reports whether latest is a higher release version than current.
 func Newer(latest, current string) bool {
 	l, c := releasePattern.FindStringSubmatch(latest), releasePattern.FindStringSubmatch(current)
 	if l == nil || c == nil {
@@ -98,11 +79,9 @@ func Newer(latest, current string) bool {
 			return x > y
 		}
 	}
-	// A release is newer than its own prereleases.
 	return l[4] == "" && c[4] != ""
 }
 
-// Notice is the update notice printed on stderr after a command's output.
 func Notice(current, latest string, goBin bool) string {
 	how := "clarity update"
 	if goBin {
@@ -145,8 +124,6 @@ func get(ctx context.Context, url string, limit int64) ([]byte, error) {
 	return b, nil
 }
 
-// Latest looks up the latest published release from the tag in the
-// releases/latest redirect. The redirect is never followed.
 func (s Source) Latest(ctx context.Context) (*Release, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", s.LatestURL, nil)
 	if err != nil {
@@ -174,8 +151,6 @@ func (s Source) Latest(ctx context.Context) (*Release, error) {
 	return &Release{Tag: tag, URL: ReleaseURL(tag)}, nil
 }
 
-// redirectTag returns the release tag from a releases/latest redirect, which
-// must point at releases/tag/<tag> on the scheme and host that were asked.
 func redirectTag(latest *url.URL, location string) (string, error) {
 	if location == "" {
 		return "", errors.New("the response did not name a release")
@@ -194,7 +169,6 @@ func redirectTag(latest *url.URL, location string) (string, error) {
 	return tag, nil
 }
 
-// AssetName is the GoReleaser archive for a platform (see cli-go/.goreleaser.yaml).
 func AssetName(goos, goarch string) string {
 	ext := ".tar.gz"
 	if goos == "windows" {
@@ -221,10 +195,6 @@ func VerifyChecksum(archive []byte, checksums []byte, name string) error {
 	return nil
 }
 
-// ExtractBinary returns the clarity executable from a release archive (zip on
-// Windows, tar.gz elsewhere). It refuses archives with unsafe entry names and a
-// binary entry that is missing, duplicated, oversized, or not a regular file.
-// Nothing is written to disk; the caller chooses the output path.
 func ExtractBinary(archive []byte, goos string) ([]byte, error) {
 	if goos == "windows" {
 		return extractZip(archive, "clarity.exe")
@@ -305,7 +275,6 @@ func extractZip(archive []byte, want string) ([]byte, error) {
 	return bin, nil
 }
 
-// capReader fails once more than left bytes have been read.
 type capReader struct {
 	r    io.Reader
 	left int64
@@ -319,9 +288,6 @@ func (c *capReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// isEntry reports whether an archive entry is the wanted binary. A release
-// archive never contains absolute, parent-relative, or drive paths, so any such
-// entry rejects the whole archive.
 func isEntry(name, want string) (bool, error) {
 	if name == "" || path.IsAbs(name) || strings.ContainsAny(name, `\:`) || slices.Contains(strings.Split(name, "/"), "..") {
 		return false, fmt.Errorf("release archive has an unsafe entry %q", name)
@@ -340,14 +306,11 @@ func readBinary(r io.Reader, name string) ([]byte, error) {
 	return b, nil
 }
 
-// Target is the platform to download for and the executable to replace.
 type Target struct {
 	GOOS, GOARCH string
-	Exe          string // resolved path of the installed executable
+	Exe          string
 }
 
-// Install downloads the release archive for t, verifies it against the
-// release's checksums.txt, and replaces t.Exe. Any failure leaves t.Exe as it was.
 func (s Source) Install(ctx context.Context, tag string, t Target) error {
 	if !tagPattern.MatchString(tag) {
 		return fmt.Errorf("invalid release version")
@@ -375,11 +338,6 @@ func (s Source) Install(ctx context.Context, tag string, t Target) error {
 	return Replace(t.GOOS, t.Exe, bin)
 }
 
-// Replace swaps exe for binary without leaving exe missing or partial. The new
-// file is written next to exe first. On Unix it is renamed over exe. Windows
-// cannot overwrite a running executable but can rename it, so exe moves aside to
-// exe+".old" (removed on a later start by RemoveOld) and the new file takes its
-// place. goos is a parameter so both paths are testable on any OS.
 func Replace(goos, exe string, binary []byte) error {
 	dir := filepath.Dir(exe)
 	f, err := os.CreateTemp(dir, ".clarity-update-*")
@@ -387,7 +345,7 @@ func Replace(goos, exe string, binary []byte) error {
 		return notWritable(goos, dir, err)
 	}
 	tmp := f.Name()
-	defer os.Remove(tmp) // a no-op once the file is renamed into place
+	defer os.Remove(tmp)
 	_, err = f.Write(binary)
 	if err == nil {
 		err = f.Chmod(0o755)
@@ -408,7 +366,7 @@ func Replace(goos, exe string, binary []byte) error {
 		return nil
 	}
 	old := exe + ".old"
-	_ = os.Remove(old) // a leftover from an earlier update
+	_ = os.Remove(old)
 	if err := rename(exe, old); err != nil {
 		return fmt.Errorf("move %s aside: %w", exe, err)
 	}
@@ -433,13 +391,8 @@ func notWritable(goos, dir string, err error) error {
 	return fmt.Errorf("cannot write to %s (%v); %s. The installed clarity was not changed", dir, err, hint)
 }
 
-// RemoveOld deletes the executable a Windows update moved aside. It is best
-// effort: the file stays while a process started from it is still running.
 func RemoveOld(exe string) { _ = os.Remove(exe + ".old") }
 
-// InGoBin reports whether exe is in a directory where Go tooling installs
-// binaries ($GOBIN, each $GOPATH/bin, or ~/go/bin). Such builds come from
-// source, so they are not replaced by a release binary.
 func InGoBin(exe string) bool {
 	exeDir, err := os.Stat(filepath.Dir(exe))
 	if err != nil {

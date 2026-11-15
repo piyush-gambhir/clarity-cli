@@ -59,7 +59,6 @@ func TestAuthLifecycle(t *testing.T) {
 	if code, _, _ := run("", "auth", "status"); code == 0 {
 		t.Fatal("status succeeded after logout")
 	}
-	// Logout cleared the current profile, so a bare logout must say what to pass.
 	if code, _, err := run("", "auth", "logout"); code == 0 || !strings.Contains(err, "no profile selected") {
 		t.Fatalf("logout without a profile: %d %s", code, err)
 	}
@@ -189,7 +188,6 @@ func TestLoginProfileSelection(t *testing.T) {
 			if cfg.CurrentProfile != tc.want || cfg.Profiles[tc.want].Token != "new-token" {
 				t.Fatalf("current %q, %q token %q; want %q current with new token", cfg.CurrentProfile, tc.want, cfg.Profiles[tc.want].Token, tc.want)
 			}
-			// Other saved profiles keep their tokens.
 			for name, old := range map[string]string{"default": "old-default", "prod": "old-prod"} {
 				if tc.seed && name != tc.want && cfg.Profiles[name].Token != old {
 					t.Fatalf("login to %q overwrote profile %q", tc.want, name)

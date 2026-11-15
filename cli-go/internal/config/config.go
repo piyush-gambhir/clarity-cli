@@ -45,7 +45,6 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
-	// Do not echo YAML parser errors: malformed lines can contain credentials.
 	if err := yaml.Unmarshal(b, c); err != nil {
 		return nil, fmt.Errorf("invalid YAML config at %s", path)
 	}
@@ -94,7 +93,6 @@ func (c *Config) Resolve(profile, token string) (string, string, error) {
 	if profile == "" {
 		profile = c.CurrentProfile
 	}
-	// A set but blank override is an error rather than a silently empty credential.
 	if token != "" {
 		if token = strings.TrimSpace(token); token == "" {
 			return "", "", fmt.Errorf("--token is blank")

@@ -23,7 +23,6 @@ func Print(w io.Writer, format string, data any) error {
 		e.SetIndent("", "  ")
 		return e.Encode(data)
 	}
-	// Normalize typed structs and maps through JSON while preserving numeric precision.
 	b, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -57,7 +56,6 @@ func Print(w io.Writer, format string, data any) error {
 			_, err := fmt.Fprintln(w, "No results.")
 			return err
 		}
-		// Export API: each metric has a separate information table.
 		if m, ok := rows[0].(map[string]any); ok && m["metricName"] != nil && m["information"] != nil {
 			for _, row := range rows {
 				m, ok := row.(map[string]any)

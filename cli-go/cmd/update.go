@@ -22,7 +22,7 @@ type updateStatus struct {
 	LatestVersion   string `json:"latest_version"`
 	UpdateAvailable bool   `json:"update_available"`
 	ReleaseURL      string `json:"release_url"`
-	InstallMethod   string `json:"install_method"` // "self" (release binary) or "go" (Go bin directory)
+	InstallMethod   string `json:"install_method"`
 	Updated         bool   `json:"updated,omitempty"`
 }
 
@@ -58,14 +58,12 @@ CLARITY_NO_UPDATE_NOTIFIER=1 or NO_UPDATE_NOTIFIER=1.`,
 			if err != nil {
 				return err
 			}
-			// Share the answer with the update notice so the two never disagree.
 			if path, err := updateCachePath(); err == nil {
 				saveLatest(path, r.Tag)
 			}
 			current := update.Display(build.Version)
 			s := updateStatus{
 				CurrentVersion: current, LatestVersion: r.Tag, ReleaseURL: r.URL, InstallMethod: "self",
-				// A dev or unknown build can always move to the published release.
 				UpdateAvailable: update.Newer(r.Tag, build.Version) || !update.IsRelease(build.Version),
 			}
 			exe, exeErr := a.executable()
@@ -120,7 +118,6 @@ func updateCommand(s updateStatus) string {
 	return "clarity update"
 }
 
-// result prints human text in table mode and the status in JSON/YAML.
 func (a *app) result(s updateStatus, text string) error {
 	if a.format == "table" {
 		_, err := fmt.Fprintln(a.out, text)
@@ -129,20 +126,13 @@ func (a *app) result(s updateStatus, text string) error {
 	return a.print(s)
 }
 
-// noticeWait bounds how long a command that started the day's release lookup
-// waits for it before exiting, so a fast command does not lose the answer.
 const noticeWait = time.Second
 
-// updateCheck carries the background release check from PersistentPreRun to PersistentPostRun.
 type updateCheck struct {
-	done chan struct{} // closed once the cache holds this run's result
+	done chan struct{}
 	path string
 }
 
-// startUpdateCheck begins the release check behind the update notice. A fresh
-// cache answers at once; otherwise one GitHub lookup runs in the background.
-// Scripts, CI, opt-outs, quiet mode, dev builds, and the commands that report
-// versions themselves never check.
 func (a *app) startUpdateCheck(cmd *cobra.Command) {
 	switch name := cmd.Name(); {
 	case name == "update", name == "version", name == "completion", name == "help", strings.HasPrefix(name, "__complete"):
@@ -163,9 +153,6 @@ func (a *app) startUpdateCheck(cmd *cobra.Command) {
 		a.check = c
 		return
 	}
-	// Record the attempt before the request: a lookup that fails, or that the
-	// process exits before, counts as the day's check, so GitHub is asked at most
-	// once a day.
 	cache.CheckedAt = time.Now()
 	if cache.Save(path) != nil {
 		return
@@ -184,18 +171,12 @@ func (a *app) startUpdateCheck(cmd *cobra.Command) {
 	}()
 }
 
-// saveLatest records a successful release lookup, reloading the cache so a
-// notice another command recorded meanwhile is kept.
 func saveLatest(path, tag string) {
 	cache := update.LoadCache(path)
 	cache.CheckedAt, cache.LatestVersion = time.Now(), tag
 	_ = cache.Save(path)
 }
 
-// printUpdateNotice prints the notice once the check has finished. A cached
-// answer is ready at once; the day's lookup gets at most noticeWait, because the
-// attempt is already recorded and an answer lost on exit would hide the notice
-// for a day.
 func (a *app) printUpdateNotice() {
 	c := a.check
 	if c == nil {
@@ -206,8 +187,6 @@ func (a *app) printUpdateNotice() {
 	case <-time.After(noticeWait):
 		return
 	}
-	// Read the cache now, not at start, so commands that ran meanwhile and
-	// already showed this release keep it to once a day.
 	cache := update.LoadCache(c.path)
 	if !cache.ShouldNotify(build.Version, time.Now()) {
 		return
@@ -226,7 +205,6 @@ func updateCachePath() (string, error) {
 	return filepath.Join(filepath.Dir(p), update.CacheFile), nil
 }
 
-// executable is the running binary with symlinks resolved, the file an update replaces.
 func executable() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {
