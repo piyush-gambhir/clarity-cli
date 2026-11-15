@@ -34,7 +34,6 @@ if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
   echo 'Checksum verification failed.' >&2
   exit 1
 fi
-# Extract only the expected binary, not arbitrary archive paths.
 tar -xzf "$tmp/$asset" -C "$tmp" clarity
 if [ ! -f "$tmp/clarity" ] || [ -L "$tmp/clarity" ]; then
   echo 'Archive does not contain a regular clarity binary.' >&2

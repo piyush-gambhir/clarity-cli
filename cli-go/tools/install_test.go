@@ -14,8 +14,6 @@ import (
 	"testing"
 )
 
-// Exercise the real installer using local release fixtures and a fake curl.
-// No external requests or system installation are performed.
 func TestInstaller(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX installer; Windows uses ZIP downloads")

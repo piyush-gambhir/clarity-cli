@@ -39,7 +39,6 @@ func (e *APIError) Error() string {
 
 func New(token string, timeout time.Duration) *Client {
 	return &Client{Token: token, HTTP: &http.Client{Timeout: timeout, CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		// Never forward project credentials to a redirect target.
 		return http.ErrUseLastResponse
 	}}}
 }
@@ -76,7 +75,6 @@ func (c *Client) request(ctx context.Context, method, endpoint string, body any)
 		fmt.Fprintf(c.Log, "HTTP %d\n", res.StatusCode)
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		// Avoid reflecting response bodies that may contain credentials or HTML.
 		message := http.StatusText(res.StatusCode)
 		switch res.StatusCode {
 		case 401:

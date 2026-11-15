@@ -26,11 +26,10 @@ type app struct {
 	in                                io.Reader
 	out, errOut                       io.Writer
 	newClient                         func(string, time.Duration) *client.Client
-	// Update injection points; newRoot fills real defaults.
-	releases   update.Source
-	terminal   func(any) bool
-	executable func() (string, error)
-	check      *updateCheck
+	releases                          update.Source
+	terminal                          func(any) bool
+	executable                        func() (string, error)
+	check                             *updateCheck
 }
 
 func envBool(name string) bool { s := os.Getenv(name); return s == "1" || strings.EqualFold(s, "true") }
@@ -54,7 +53,6 @@ func newRoot(a *app) *cobra.Command {
 		Long:         "Read Microsoft Clarity data using project API tokens.\nExport dashboard metrics, query analytics, find session recordings, and search documentation.\nAll remote operations are read-only. Profiles store one token per project.",
 		SilenceUsage: true, SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// Safety settings from the environment are sticky: an explicit false flag cannot undo them.
 			if envBool("CLARITY_READ_ONLY") {
 				a.readOnly = true
 			}
@@ -128,7 +126,7 @@ func newRoot(a *app) *cobra.Command {
 func Run(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) int {
 	if runtime.GOOS == "windows" {
 		if exe, err := executable(); err == nil {
-			update.RemoveOld(exe) // left behind by a previous self-update
+			update.RemoveOld(exe)
 		}
 	}
 	a := &app{in: in, out: out, errOut: errOut, newClient: client.New}
@@ -137,7 +135,6 @@ func Run(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer
 	if err := root.ExecuteContext(ctx); err != nil {
 		message := err.Error()
 		for _, secret := range []string{a.token, os.Getenv("CLARITY_API_TOKEN")} {
-			// Tokens are used trimmed; a blank value is not a secret to redact.
 			if secret = strings.TrimSpace(secret); secret != "" {
 				message = strings.ReplaceAll(message, secret, "[REDACTED]")
 			}

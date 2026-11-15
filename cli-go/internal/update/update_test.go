@@ -23,7 +23,7 @@ import (
 
 type entry struct {
 	name     string
-	typeflag byte // tar type; for zip, TypeSymlink marks a symlink
+	typeflag byte
 	body     string
 }
 
@@ -160,7 +160,6 @@ func assertFile(t *testing.T, path, want string) {
 	}
 }
 
-// assertOnly fails if dir holds anything besides the named files (such as a leftover temp file).
 func assertOnly(t *testing.T, dir string, names ...string) {
 	t.Helper()
 	entries, err := os.ReadDir(dir)
@@ -198,11 +197,9 @@ func TestReplaceWindowsRenamesRunningExeAside(t *testing.T) {
 	}
 	assertFile(t, exe, "new")
 	assertFile(t, exe+".old", "old")
-	// The next start removes the leftover.
 	RemoveOld(exe)
 	assertOnly(t, filepath.Dir(exe), "clarity.exe")
 
-	// A failed move into place restores the previous executable.
 	defer func() { rename = os.Rename }()
 	rename = func(from, to string) error {
 		if strings.Contains(filepath.Base(from), ".clarity-update-") {
@@ -276,7 +273,6 @@ func TestInstall(t *testing.T) {
 	assertFile(t, winExe, "windows build")
 	assertFile(t, winExe+".old", "old")
 
-	// Missing assets and checksum mismatches leave the installed binary alone.
 	keep := writeExe(t, "old")
 	if err := src.Install(ctx, "v0.1.3", Target{GOOS: "darwin", GOARCH: "arm64", Exe: keep}); err == nil || !strings.Contains(err.Error(), "no clarity-cli_darwin_arm64.tar.gz asset") {
 		t.Fatalf("missing asset: %v", err)
@@ -292,9 +288,9 @@ func TestInstall(t *testing.T) {
 func TestLatestReadsRedirectWithoutFollowing(t *testing.T) {
 	var followed atomic.Bool
 	for _, tc := range []struct {
-		name, location string // SRV in location is the test server's origin
+		name, location string
 		status         int
-		want           string // tag, or a substring of the error
+		want           string
 	}{
 		{"good tag", "SRV/o/r/releases/tag/v0.1.3", http.StatusFound, "v0.1.3"},
 		{"relative location", "/o/r/releases/tag/v1.2.0-rc.1", http.StatusFound, "v1.2.0-rc.1"},

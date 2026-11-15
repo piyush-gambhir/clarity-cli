@@ -7,7 +7,6 @@ import (
 	"testing"
 )
 
-// commands resolve uses the real parser: a flag before the subcommand cannot hide it.
 func TestCommandsResolve(t *testing.T) {
 	for _, tc := range []struct {
 		args   []string

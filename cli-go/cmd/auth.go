@@ -29,7 +29,6 @@ func (a *app) login() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			// Same selection as every other command, plus a first-login fallback.
 			name := a.profile
 			if name == "" {
 				name = os.Getenv("CLARITY_PROFILE")
