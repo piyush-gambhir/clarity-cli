@@ -11,7 +11,7 @@ func TestCommandsResolve(t *testing.T) {
 	for _, tc := range []struct {
 		args   []string
 		effect string
-	}{{[]string{"export", "--days", "1"}, "read"}, {[]string{"-o", "json", "auth", "logout"}, "local_write"}} {
+	}{{[]string{"export", "--days", "1"}, "read"}, {[]string{"-o", "json", "auth", "logout"}, "local_write"}, {[]string{"update", "--yes"}, "local_write"}} {
 		var out bytes.Buffer
 		root := NewRoot(strings.NewReader(""), &out, &bytes.Buffer{})
 		root.SetArgs(append([]string{"commands", "resolve", "--"}, tc.args...))
@@ -27,5 +27,21 @@ func TestCommandsResolve(t *testing.T) {
 	root.SetArgs([]string{"commands", "resolve", "--", "nonsense"})
 	if root.Execute() == nil {
 		t.Fatal("an unknown command resolved")
+	}
+}
+
+func TestCommandsResolveRedactsToken(t *testing.T) {
+	var out bytes.Buffer
+	root := NewRoot(strings.NewReader(""), &out, &bytes.Buffer{})
+	root.SetArgs([]string{"commands", "resolve", "--", "export", "--days", "1", "--token", "secret-token-value"})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var got resolution
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "secret-token-value") || got.Flags["token"] != "[REDACTED]" || got.Flags["days"] != "1" {
+		t.Errorf("got %s", out.String())
 	}
 }

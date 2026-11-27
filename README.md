@@ -167,7 +167,7 @@ clarity recordings list --filters-file filters.json \
 clarity recordings filters -o json
 ```
 
-Dates accept RFC3339 or `YYYY-MM-DD` (midnight UTC, including the end date). The backend receives both top-level start/end and matching `filters.date`. Without explicit dates, the interval ends now and starts two days earlier. `--days` can change this interval but cannot combine with an explicit start or a file-provided date. Explicit flags override matching file filters. Use `--rage-clicks=false` to explicitly request false. Range filters need both `min` and `max`; either may be null. Supported ranges are nonnegative; percentages must be 0–100. Device values use `PC`, not `Desktop`.
+Dates accept RFC3339 or `YYYY-MM-DD` (midnight UTC). A date-only `--end` means 00:00 UTC on that day, so `--end 2026-09-08` leaves out September 8; use `--end 2026-09-09` to include it. The backend receives both top-level start/end and matching `filters.date`. Without explicit dates, the interval ends now and starts two days earlier. `--days` can change this interval but cannot combine with an explicit start or a file-provided date. Explicit flags override matching file filters. Use `--rage-clicks=false` to explicitly request false. Range filters need both `min` and `max`; either may be null. Supported ranges are nonnegative; percentages must be 0–100. Device values use `PC`, not `Desktop`.
 
 The maximum sample size is 250. Date lookbacks do not extend Clarity's retention or guarantee data availability. These commands return metadata/links/timelines exposed by the backend, not downloadable recording videos or heatmap images.
 
