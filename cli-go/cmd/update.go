@@ -28,7 +28,7 @@ type updateStatus struct {
 
 func (a *app) update() *cobra.Command {
 	var check, yes bool
-	c := &cobra.Command{Use: "update", Short: "Check for or install the latest release", Args: cobra.NoArgs,
+	c := &cobra.Command{Use: "update", Short: "Check for or install the latest release", Args: cobra.NoArgs, Annotations: map[string]string{"self-update": "true"},
 		Long: `Check for or install the latest clarity release from GitHub.
 
 update downloads this platform's release archive (tar.gz on macOS and Linux, zip

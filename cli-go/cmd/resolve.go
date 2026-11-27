@@ -23,7 +23,7 @@ func (a *app) commandsCmd() *cobra.Command {
 	c := &cobra.Command{Use: "commands", Short: "Offline command discovery for agents"}
 	c.AddCommand(&cobra.Command{Use: "resolve -- <arguments>", Short: "Show the command, effect and flags that arguments would run, without running them",
 		DisableFlagParsing: true,
-		Example:            "  clarity commands resolve -- sites list",
+		Example:            "  clarity commands resolve -- export --days 1",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			for i, arg := range args {
 				if arg == "--" {
@@ -49,7 +49,12 @@ func (a *app) commandsCmd() *cobra.Command {
 				res.Effect, res.Conditional = "local_write", ann["writes-local"] == "conditional"
 			}
 			res.Interactive = ann["interactive"] == "true"
-			target.Flags().Visit(func(f *pflag.Flag) { res.Flags[f.Name] = f.Value.String() })
+			target.Flags().Visit(func(f *pflag.Flag) {
+				res.Flags[f.Name] = f.Value.String()
+				if f.Name == "token" {
+					res.Flags[f.Name] = "[REDACTED]"
+				}
+			})
 			return a.print(res)
 		}})
 	return c

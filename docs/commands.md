@@ -137,7 +137,7 @@ clarity commands resolve -- <arguments>
 ```
 
 ```bash
-  clarity commands resolve -- sites list
+  clarity commands resolve -- export --days 1
 ```
 
 ## clarity completion
